@@ -1,0 +1,133 @@
+@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@450;700;900&family=Kantumruy+Pro:ital,wght@0,100..900;1,100..900&family=Moul&family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Kantumruy Pro", "Battambang", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-khmer-muol: "Moul", "Khmer OS Muol", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-brand-bg: #F5F2ED;
+  --color-brand-green: #4A5D45;
+  --color-brand-green-muted: #7A8C75;
+  --color-brand-brown: #6B5E55;
+  --color-brand-brown-muted: #9A8478;
+  --color-brand-clay: #DED0C1;
+  --color-brand-sand: #E8E1D5;
+  --color-brand-sand-light: #F9F7F4;
+  --color-brand-accent: #F27D26;
+  --color-brand-accent-hover: #D96D1F;
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.25s ease-out forwards;
+  }
+  .animate-scan-line-movement {
+    animation: scanLine 2s linear infinite;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes scanLine {
+  0% {
+    top: 0%;
+  }
+  50% {
+    top: 100%;
+  }
+  100% {
+    top: 0%;
+  }
+}
+
+/* Landscape Print Layout styles */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 1.5cm 1cm 1.5cm 1cm;
+  }
+
+  /* Body background reset */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 10pt !important;
+  }
+
+  /* Hide elements from printing */
+  .print\:hidden,
+  button,
+  input,
+  select,
+  #sidebar,
+  #filters-card,
+  #stats-panel,
+  #instructions-card,
+  .action-buttons,
+  #date-selector-container,
+  #signature-modal-overlay {
+    display: none !important;
+  }
+
+  /* Forces table container to print naturally without scrolling */
+  #attendance-table-container {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th {
+    background-color: #f1f5f9 !important;
+    color: #1e293b !important;
+    border: 1px solid #94a3b8 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  td {
+    border: 1px solid #cbd5e1 !important;
+    color: black !important;
+  }
+
+  /* Make sure images stay inside page size */
+  img {
+    max-height: 40px !important;
+    width: auto !important;
+    display: block !important;
+    margin: 0 auto !important;
+  }
+
+  /* Force display of printed Cambodian header */
+  #print-header-letterhead {
+    display: block !important;
+  }
+
+  #print-footer-signatures {
+    display: block !important;
+  }
+}
+
+/* Hidden by default on screen */
+#print-header-letterhead {
+  display: none;
+}
+
+#print-footer-signatures {
+  display: none;
+}
