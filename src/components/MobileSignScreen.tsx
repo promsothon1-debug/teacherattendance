@@ -38,9 +38,6 @@ export default function MobileSignScreen({ teacherId, mode, date, teachers }: Mo
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [loadingLocation, setLoadingLocation] = useState(false);
-  const [gpsLocation, setGpsLocation] = useState<GPSLocation | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [verificationQrUrl, setVerificationQrUrl] = useState('');
   const [currentTime, setCurrentTime] = useState('');
@@ -71,47 +68,7 @@ export default function MobileSignScreen({ teacherId, mode, date, teachers }: Mo
     ctx.lineWidth = 3.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-
-    // Auto-fetch location on mobile screen load
-    fetchLocation();
   }, [isSubmitted, teacher]);
-
-  const fetchLocation = () => {
-    setLoadingLocation(true);
-    setLocationError(null);
-
-    if (!navigator.geolocation) {
-      setLocationError('កម្មវិធីរុករកមិនគាំទ្រ GPS ទេ។');
-      setLoadingLocation(false);
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setGpsLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          timestamp: new Date().toLocaleTimeString('km-KH')
-        });
-        setLoadingLocation(false);
-      },
-      (error) => {
-        console.error('Mobile Geolocation error:', error);
-        let errorMsg = 'បដិសេធ GPS (សូមបើកការអនុញ្ញាតទីតាំង)';
-        if (error.code === error.PERMISSION_DENIED) {
-          errorMsg = 'សូមបើក Location Permission ក្នុងទូរស័ព្ទរបស់អ្នក';
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          errorMsg = 'មិនមាន GPS ល្អជុំវិញឧបករណ៍ឡើយ';
-        } else if (error.code === error.TIMEOUT) {
-          errorMsg = 'ការទាញយកទីតាំងហួសពេលកំណត់';
-        }
-        setLocationError(errorMsg);
-        setLoadingLocation(false);
-      },
-      { enableHighAccuracy: true, timeout: 6000 }
-    );
-  };
 
   const getCoordinates = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -218,8 +175,8 @@ export default function MobileSignScreen({ teacherId, mode, date, teachers }: Mo
       m: mode,
       ti: currentTime,
       sig: optimizedBase64,
-      lat: gpsLocation ? Number(gpsLocation.latitude.toFixed(6)) : null,
-      lng: gpsLocation ? Number(gpsLocation.longitude.toFixed(6)) : null
+      lat: null,
+      lng: null
     };
 
     // Serialize compact payload
@@ -489,51 +446,6 @@ export default function MobileSignScreen({ teacherId, mode, date, teachers }: Mo
                   TOUCH PAD FOR SIGNATURE
                 </div>
               </div>
-            </div>
-
-            {/* GPS verification cards */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-brand-clay/30">
-              <div className="flex justify-between items-center">
-                <span className="text-xs md:text-sm font-semibold text-stone-800 flex items-center gap-1.5">
-                  <MapPin className={`h-4 w-4 ${gpsLocation ? 'text-brand-green animate-bounce' : 'text-stone-400'}`} />
-                  <span>ទីតាំង GPS បច្ចុប្បន្ន</span>
-                </span>
-                <button 
-                  onClick={fetchLocation}
-                  disabled={loadingLocation}
-                  className="text-[11px] text-brand-green hover:bg-brand-sand hover:text-brand-brown font-bold flex items-center gap-1 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
-                  id="mobile-refetch-location-btn"
-                >
-                  <RefreshCw className={`h-3 w-3 ${loadingLocation ? 'animate-spin' : ''}`} />
-                  <span>{gpsLocation ? 'ទាញជាថ្មី' : 'រកទីតាំង'}</span>
-                </button>
-              </div>
-
-              {loadingLocation ? (
-                <div className="flex items-center gap-2 mt-2 py-1 pl-1 text-xs text-stone-500 italic">
-                  <div className="w-3.5 h-3.5 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
-                  <span>កំពុងទាញទីតាំងពីផ្កាយរណប...</span>
-                </div>
-              ) : gpsLocation ? (
-                <div className="mt-3 bg-brand-sand/20 rounded-xl p-3 border border-brand-clay/20 text-[11px] space-y-1 text-stone-700">
-                  <div className="flex justify-between">
-                    <span>រយៈទទឹង (Latitude)៖</span>
-                    <span className="font-semibold font-mono text-stone-900">{gpsLocation.latitude.toFixed(6)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>រយៈបណ្តោយ (Longitude)៖</span>
-                    <span className="font-semibold font-mono text-stone-900">{gpsLocation.longitude.toFixed(6)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>កម្រិតលំអៀង (Accuracy)៖</span>
-                    <span className="font-semibold text-brand-green font-mono">±{gpsLocation.accuracy?.toFixed(0)}m</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-2 bg-[#ff0a0a]/5 p-3 rounded-xl border border-[#ff0a0a]/10 text-[11px] text-[#ff0a0a] flex items-center gap-1.5">
-                  <span>⚠️ {locationError || 'មិនទាន់មានទិន្នន័យ GPS ទេ។'}</span>
-                </div>
-              )}
             </div>
 
             {/* Submit button */}

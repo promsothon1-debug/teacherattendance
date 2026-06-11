@@ -24,9 +24,6 @@ export default function SignatureModal({
 }: SignatureModalProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [gpsLocation, setGpsLocation] = useState<GPSLocation | null>(null);
-  const [loadingLocation, setLoadingLocation] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
 
   // Initialize and scale canvas for high API screen matching
   useEffect(() => {
@@ -47,62 +44,7 @@ export default function SignatureModal({
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-
-    // Fetch GPS coordinates immediately when modal opens
-    fetchLocation();
   }, [isOpen]);
-
-  const fetchLocation = () => {
-    setLoadingLocation(true);
-    setLocationError(null);
-
-    if (!navigator.geolocation) {
-      setLocationError('កម្មវិធីរុករក (Browser) មិនគាំទ្រប្រព័ន្ធទីតាំង GPS ទេ។');
-      setLoadingLocation(false);
-      // Fallback location for Demo inside restricted iframe
-      setGpsLocation({
-        latitude: 13.5245,
-        longitude: 102.5831, // coordinates of Ou Sralau / Kamrieng region approx
-        accuracy: 15,
-        timestamp: new Date().toLocaleTimeString('km-KH')
-      });
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setGpsLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          timestamp: new Date().toLocaleTimeString('km-KH')
-        });
-        setLoadingLocation(false);
-      },
-      (error) => {
-        console.error('Geolocation error:', error);
-        let errorMsg = 'មិនអាចទាញយកទីតាំងបានទេ';
-        if (error.code === error.PERMISSION_DENIED) {
-          errorMsg = 'ការអនុញ្ញាតទីតាំងត្រូវបានបដិសេធ (សូមបើកគាំទ្រ GPS)';
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          errorMsg = 'ទីតាំង GPS មិនអាចរកបានឡើយ';
-        } else if (error.code === error.TIMEOUT) {
-          errorMsg = 'ការទាញយកទីតាំងមានរយៈពេលយូរពេក';
-        }
-        setLocationError(errorMsg);
-        setLoadingLocation(false);
-
-        // Fallback mock location for development/iframe testing
-        setGpsLocation({
-          latitude: 13.5242,
-          longitude: 102.5828,
-          accuracy: 25,
-          timestamp: new Date().toLocaleTimeString('km-KH')
-        });
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
-  };
 
   const getCoordinates = (e: MouseEvent | TouchEvent | React.MouseEvent | React.TouchEvent) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
@@ -171,7 +113,7 @@ export default function SignatureModal({
     if (!canvas) return;
 
     const signatureBase64 = canvas.toDataURL('image/png');
-    onSave(signatureBase64, gpsLocation || undefined);
+    onSave(signatureBase64, undefined);
     onClose();
   };
 
@@ -234,62 +176,6 @@ export default function SignatureModal({
                 DIGITAL SIGNATURE PAD
               </div>
             </div>
-          </div>
-
-          {/* GPS Location Tracker Area */}
-          <div className="pt-2 border-t border-brand-clay">
-            <div className="flex justify-between items-center mb-1.5">
-              <span className="text-sm font-semibold text-brand-brown flex items-center gap-1.5">
-                <MapPin className="h-4 w-4 text-brand-green animate-bounce" />
-                <span>ទីតាំង GPS ពិតប្រាកដ (Geolocation)</span>
-              </span>
-              <button 
-                onClick={fetchLocation}
-                disabled={loadingLocation}
-                className="text-xs text-brand-green hover:text-brand-brown font-bold flex items-center gap-1 hover:bg-brand-sand px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
-                id="re-fetch-location-btn"
-              >
-                {loadingLocation ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3 w-3" />
-                )}
-                <span>ស្គេនទីតាំងឡើងវិញ</span>
-              </button>
-            </div>
-
-            {loadingLocation ? (
-              <div className="bg-brand-sand-light border border-brand-clay rounded-xl p-3 flex items-center justify-center gap-2.5 text-xs text-brand-brown-muted">
-                <Loader2 className="h-4 w-4 animate-spin text-brand-green" />
-                <span>កំពុងស្វែងរកកូអរដោនេ GPS...</span>
-              </div>
-            ) : locationError ? (
-              <div className="bg-brand-accent/10 border border-brand-accent/30 text-brand-brown rounded-xl p-3 space-y-1.5 text-xs">
-                <div className="flex items-center gap-1.5 font-bold text-brand-green">
-                  <AlertTriangle className="h-4 w-4 text-brand-accent" />
-                  <span>ការទាញយកទីតាំងមានឧបសគ្គ</span>
-                </div>
-                <p className="text-brand-brown-muted">{locationError}</p>
-                <div className="text-[10px] bg-white/70 border border-brand-clay p-1.5 rounded text-brand-brown-muted font-medium">
-                  {gpsLocation ? (
-                    <span>ប្រព័ន្ធបានផ្តល់ទីតាំងកម្រងសាលារៀនជាបណ្តោះអាសន្ន៖ Lat: {gpsLocation.latitude.toFixed(5)}, Lng: {gpsLocation.longitude.toFixed(5)}</span>
-                  ) : (
-                    <span>សូមពិនិត្យការអនុញ្ញាត Geolocation លើឧបករណ៍ ឬ កម្មវិធីរុករក។</span>
-                  )}
-                </div>
-              </div>
-            ) : gpsLocation ? (
-              <div className="bg-brand-sand/40 border border-brand-clay rounded-xl p-3 space-y-1 text-xs">
-                <div className="flex justify-between items-center text-brand-green font-semibold font-sans">
-                  <span>រយៈទទឹង (Latitude): <strong className="font-bold font-mono text-brand-green">{gpsLocation.latitude.toFixed(6)}</strong></span>
-                  <span>រយៈបណ្តោយ (Longitude): <strong className="font-bold font-mono text-brand-green">{gpsLocation.longitude.toFixed(6)}</strong></span>
-                </div>
-                <div className="flex justify-between items-center text-[10px] text-brand-brown-muted font-mono pt-1 border-t border-brand-clay">
-                  <span>ភាពត្រឹមត្រូវ (Accuracy): ±{Math.round(gpsLocation.accuracy || 10)} ម៉ែត្រ</span>
-                  <span>ម៉ោងទទួលបាន៖ {gpsLocation.timestamp}</span>
-                </div>
-              </div>
-            ) : null}
           </div>
         </div>
 

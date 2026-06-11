@@ -16,10 +16,12 @@ import {
   FileText, 
   ShieldAlert,
   ChevronDown,
-  QrCode
+  QrCode,
+  UserX
 } from 'lucide-react';
 import { AttendanceRecord, Gender, Shift } from '../types';
 import { calculateMinutesLate, toKhmerNumber } from '../utils/timeUtils';
+import SignatureModal from './SignatureModal';
 
 interface AttendanceTableProps {
   records: AttendanceRecord[];
@@ -28,6 +30,8 @@ interface AttendanceTableProps {
   onQrClick: (record: AttendanceRecord, mode: 'in' | 'out') => void;
   onUpdateRemarks: (recordId: string, remarks: string) => void;
   onRemoveRecord: (recordId: string) => void;
+  onDeleteTeacher?: (teacherId: string) => void;
+  onMassCheckIn?: (recordIds: string[], mode: 'in' | 'out', signatureBase64: string | null) => void;
   filterShift: string;
   filterGender: string;
   filterSchool: string;
@@ -42,6 +46,8 @@ export default function AttendanceTable({
   onQrClick,
   onUpdateRemarks,
   onRemoveRecord,
+  onDeleteTeacher,
+  onMassCheckIn,
   filterShift,
   filterGender,
   filterSchool,
@@ -51,6 +57,69 @@ export default function AttendanceTable({
   // Store active inline remarks edit states
   const [editingRemarkId, setEditingRemarkId] = useState<string | null>(null);
   const [remarkValue, setRemarkValue] = useState('');
+
+  // Mass selection states
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isMassSignatureOpen, setIsMassSignatureOpen] = useState(false);
+  const [massActionMode, setMassActionMode] = useState<'in' | 'out'>('in');
+
+  // Filter and search application (moved up to avoid TDZ for mass actions)
+  const filteredRecords = records.filter((rec) => {
+    const matchesSearch = rec.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          rec.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          rec.school.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesShift = filterShift === 'all' || rec.shift === filterShift;
+    const matchesGender = filterGender === 'all' || rec.gender === filterGender;
+    const matchesSchool = filterSchool === 'all' || rec.school === filterSchool;
+
+    return matchesSearch && matchesShift && matchesGender && matchesSchool;
+  });
+
+  // Handle individual row select toggle
+  const handleSelectRowToggle = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  // Handle select all visible toggle
+  const handleSelectAllToggle = () => {
+    const allFilteredIds = filteredRecords.map((r) => r.id);
+    const areAllSelected = allFilteredIds.length > 0 && 
+      allFilteredIds.every((id) => selectedIds.includes(id));
+
+    if (areAllSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !allFilteredIds.includes(id)));
+    } else {
+      setSelectedIds((prev) => {
+        const uniqueSet = new Set([...prev, ...allFilteredIds]);
+        return Array.from(uniqueSet);
+      });
+    }
+  };
+
+  const handleTriggerMassAction = (mode: 'in' | 'out', type: 'flag' | 'signature') => {
+    if (selectedIds.length === 0) return;
+
+    if (type === 'flag') {
+      if (onMassCheckIn) {
+        onMassCheckIn(selectedIds, mode, null);
+      }
+      setSelectedIds([]); // Reset selection on success
+    } else {
+      setMassActionMode(mode);
+      setIsMassSignatureOpen(true);
+    }
+  };
+
+  const handleSaveMassSignature = (signatureBase64: string) => {
+    if (onMassCheckIn && selectedIds.length > 0) {
+      onMassCheckIn(selectedIds, massActionMode, signatureBase64);
+    }
+    setSelectedIds([]); // Reset selection on success
+    setIsMassSignatureOpen(false);
+  };
 
   // Handle remarks inline saving
   const startEditingRemarks = (record: AttendanceRecord) => {
@@ -100,19 +169,6 @@ export default function AttendanceTable({
     
     return minutesInDay > thresholdMinutes;
   };
-
-  // Filter and search application
-  const filteredRecords = records.filter((rec) => {
-    const matchesSearch = rec.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          rec.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          rec.school.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesShift = filterShift === 'all' || rec.shift === filterShift;
-    const matchesGender = filterGender === 'all' || rec.gender === filterGender;
-    const matchesSchool = filterSchool === 'all' || rec.school === filterSchool;
-
-    return matchesSearch && matchesShift && matchesGender && matchesSchool;
-  });
 
   return (
     <div className="bg-white rounded-[32px] border border-brand-clay shadow-sm overflow-hidden" id="attendance-table-container">
@@ -172,6 +228,70 @@ export default function AttendanceTable({
         </div>
       </div>
 
+      {/* Mass Action Bar */}
+      {selectedIds.length > 0 && (
+        <div className="bg-brand-green/10 border-b border-brand-clay px-6 py-3.5 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3 animate-fade-in print:hidden">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="bg-brand-green text-white rounded-full w-5 h-5 flex items-center justify-center text-[11px] font-extrabold font-mono shadow-sm">
+              {selectedIds.length}
+            </div>
+            <span className="text-xs md:text-sm font-bold text-brand-brown">
+              លោកគ្រូ/អ្នកគ្រូដែលបានជ្រើសរើស (Selected Teachers)
+            </span>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+            {/* Mass Check-In Actions */}
+            <button
+              onClick={() => handleTriggerMassAction('in', 'flag')}
+              className="px-3 py-1.5 text-xs font-bold text-brand-brown bg-white hover:bg-brand-sand border border-brand-clay rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="ចុះវត្តមានចូលដោយស្វ័យប្រវត្តតាមរយៈការដៅសញ្ញាសម្គាល់ 'វត្តមានរួម'"
+            >
+              <LogIn className="h-3.5 w-3.5 text-brand-accent" />
+              <span>វត្តមានចូលរួមគ្នា (Mass Check-In Flag)</span>
+            </button>
+
+            <button
+              onClick={() => handleTriggerMassAction('in', 'signature')}
+              className="px-3 py-1.5 text-xs font-bold text-white bg-brand-accent hover:bg-brand-accent-hover rounded-xl shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="ចុះវត្តមានចូលដោយចុះហត្ថលេខារួមមួយសម្រាប់ទាំងអស់គ្នា"
+            >
+              <Edit3 className="h-3.5 w-3.5 text-white" />
+              <span>ចុះហត្ថលេខាចូលរួមគ្នា (Shared Signature)</span>
+            </button>
+
+            {/* Divider */}
+            <div className="h-6 w-px bg-brand-clay/60 hidden xl:block mx-1" />
+
+            {/* Mass Check-Out Actions */}
+            <button
+              onClick={() => handleTriggerMassAction('out', 'flag')}
+              className="px-3 py-1.5 text-xs font-bold text-brand-brown bg-white hover:bg-brand-sand border border-brand-clay rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="ចុះវត្តមានចេញដោយស្វ័យប្រវត្តតាមរយៈការដៅសញ្ញាសម្គាល់ 'វត្តមានរួម'"
+            >
+              <LogOut className="h-3.5 w-3.5 text-brand-green" />
+              <span>វត្តមានចេញរួមគ្នា (Mass Check-Out Flag)</span>
+            </button>
+
+            <button
+              onClick={() => handleTriggerMassAction('out', 'signature')}
+              className="px-3 py-1.5 text-xs font-bold text-white bg-brand-green hover:bg-[#3d4d38] rounded-xl shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="ចុះវត្តមានចេញដោយចុះហត្ថលេខារួមមួយសម្រាប់ទាំងអស់គ្នា"
+            >
+              <Edit3 className="h-3.5 w-3.5 text-white" />
+              <span>ចុះហត្ថលេខាចេញរួមគ្នា (Shared Signature)</span>
+            </button>
+
+            <button
+              onClick={() => setSelectedIds([])}
+              className="ml-auto xl:ml-2 px-3 py-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+            >
+              បោះបង់ ({toKhmerNumber(selectedIds.length)})
+            </button>
+          </div>
+        </div>
+      )}
+
       {filteredRecords.length === 0 ? (
         <div className="p-12 text-center flex flex-col items-center justify-center space-y-3 bg-brand-sand-light/20" id="no-attendance-found">
           <div className="p-3 bg-brand-sand rounded-full border border-brand-clay text-brand-accent">
@@ -189,6 +309,15 @@ export default function AttendanceTable({
           <table className="w-full border-collapse text-left text-brand-brown">
             <thead>
               <tr className="bg-brand-sand-light border-b border-brand-clay text-xs font-semibold text-brand-brown-muted uppercase tracking-wider font-sans">
+                <th className="px-3 py-3.5 text-center w-10 print:hidden select-none">
+                  <input 
+                    type="checkbox" 
+                    checked={filteredRecords.length > 0 && filteredRecords.every((r) => selectedIds.includes(r.id))}
+                    onChange={handleSelectAllToggle}
+                    className="rounded border-brand-clay text-brand-green focus:ring-brand-green w-4 h-4 cursor-pointer align-middle accent-brand-green"
+                    title="ជ្រើសរើសទាំងអស់"
+                  />
+                </th>
                 <th className="px-4 py-3.5 text-center w-12">ល.រ</th>
                 <th className="px-4 py-3.5 min-w-[120px]">ឈ្មោះលោកគ្រូ/អ្នកគ្រូ</th>
                 <th className="px-3 py-3.5 text-center w-16">ភេទ</th>
@@ -214,8 +343,19 @@ export default function AttendanceTable({
                     key={rec.id} 
                     className={`hover:bg-brand-sand-light/50 transition-colors group ${
                       isLateIn ? 'bg-red-50/20' : ''
-                    }`}
+                    } ${selectedIds.includes(rec.id) ? 'bg-brand-sand/10' : ''}`}
                   >
+                    {/* Checkbox Column */}
+                    <td className="px-3 py-3 text-center print:hidden select-none">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedIds.includes(rec.id)}
+                        onChange={() => handleSelectRowToggle(rec.id)}
+                        className="rounded border-brand-clay text-brand-green focus:ring-brand-green w-4 h-4 cursor-pointer align-middle accent-brand-green transition-transform active:scale-95"
+                        id={`select-row-chk-${rec.id}`}
+                      />
+                    </td>
+
                     {/* Index */}
                     <td className="px-4 py-3 text-center text-brand-brown-muted font-medium font-mono">
                       {index + 1}
@@ -456,14 +596,26 @@ export default function AttendanceTable({
 
                     {/* Actions Column */}
                     <td className="px-4 py-3 text-center print:hidden">
-                      <button
-                        onClick={() => onRemoveRecord(rec.id)}
-                        className="p-1 rounded text-brand-brown-muted hover:text-rose-600 hover:bg-rose-50 transition-all opacity-0 group-hover:opacity-100"
-                        id={`delete-record-btn-${rec.id}`}
-                        title="លុបឈ្មោះគ្រូនេះចេញពីបញ្ជីវត្តមានថ្ងៃនេះ"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => onRemoveRecord(rec.id)}
+                          className="p-1 rounded text-brand-brown-muted hover:text-rose-600 hover:bg-rose-50 transition-all"
+                          id={`delete-record-btn-${rec.id}`}
+                          title="លុបឈ្មោះគ្រូនេះចេញពីបញ្ជីវត្តមានថ្ងៃនេះ (លុបបណ្តោះអាសន្ន)"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                        {onDeleteTeacher && (
+                          <button
+                            onClick={() => onDeleteTeacher(rec.teacherId)}
+                            className="p-1 rounded text-rose-500 hover:text-rose-700 hover:bg-rose-100 transition-all"
+                            id={`delete-teacher-btn-${rec.id}`}
+                            title="លុបឈ្មោះគ្រូនេះចេញពីប្រព័ន្ធទាំងស្រុង (លុបជារៀងរហូត)"
+                          >
+                            <UserX className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -471,6 +623,17 @@ export default function AttendanceTable({
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Shared Mass Signature Modal overlay */}
+      {isMassSignatureOpen && (
+        <SignatureModal
+          isOpen={isMassSignatureOpen}
+          onClose={() => setIsMassSignatureOpen(false)}
+          onSave={handleSaveMassSignature}
+          title={massActionMode === 'in' ? 'ចុះហត្ថលេខារួមសម្រាប់វត្តមាន "ចូលប្រជុំ"' : 'ចុះហត្ថលេខារួមសម្រាប់វត្តមាន "ចេញប្រជុំ"'}
+          teacherName={`${toKhmerNumber(selectedIds.length)} នាក់រួមគ្នា`}
+        />
       )}
     </div>
   );

@@ -47,11 +47,6 @@ export default function QuickScanModal({
   const [scannerActive, setScannerActive] = useState(false);
   const [activeTab, setActiveTab] = useState<'camera' | 'upload'>('camera');
   
-  // Geolocation Location state
-  const [gpsLocation, setGpsLocation] = useState<GPSLocation | null>(null);
-  const [loadingLocation, setLoadingLocation] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
-
   // File Upload State
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -83,65 +78,12 @@ export default function QuickScanModal({
     }
   }, [selectedTeacherId, attendanceRecords]);
 
-  // Handle Location tracking immediately
-  useEffect(() => {
-    if (isOpen) {
-      fetchLocation();
-    }
-  }, [isOpen]);
-
   // Clean up camera stream on close
   useEffect(() => {
     return () => {
       stopCamera();
     };
   }, []);
-
-  const fetchLocation = () => {
-    setLoadingLocation(true);
-    setLocationError(null);
-
-    if (!navigator.geolocation) {
-      setLocationError('កម្មវិធីរុករកមិនគាំទ្រប្រព័ន្ធទីតាំង GPS ទេ។');
-      setLoadingLocation(false);
-      setGpsLocation({
-        latitude: 13.5245,
-        longitude: 102.5831,
-        accuracy: 15,
-        timestamp: new Date().toLocaleTimeString('km-KH')
-      });
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setGpsLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          timestamp: new Date().toLocaleTimeString('km-KH')
-        });
-        setLoadingLocation(false);
-      },
-      (error) => {
-        console.error('Quick scan loc error:', error);
-        let errorMsg = 'មិនអាចទាញយកកូអរដោនេទីតាំងបានទេ';
-        if (error.code === error.PERMISSION_DENIED) {
-          errorMsg = 'ទីតាំង GPS ត្រូវបានបដិសេធ (សូមបើកការអនុញ្ញាត Geolocation)';
-        }
-        setLocationError(errorMsg);
-        setLoadingLocation(false);
-        // Fallback regionally
-        setGpsLocation({
-          latitude: 13.5242,
-          longitude: 102.5828,
-          accuracy: 25,
-          timestamp: new Date().toLocaleTimeString('km-KH')
-        });
-      },
-      { enableHighAccuracy: true, timeout: 6000 }
-    );
-  };
 
   // Camera Management
   const startCamera = async () => {
@@ -315,7 +257,7 @@ export default function QuickScanModal({
 
   const handleConfirmSave = () => {
     if (!selectedTeacherId || !processedSignature) return;
-    onSaveScan(selectedTeacherId, scanType, processedSignature, gpsLocation || undefined);
+    onSaveScan(selectedTeacherId, scanType, processedSignature, undefined);
     onClose();
   };
 
@@ -337,7 +279,7 @@ export default function QuickScanModal({
             </div>
             <div>
               <h3 className="font-bold text-brand-green text-base md:text-lg">
-                ម៉ាស៊ីនស្កែនវត្តមាន (ហត្ថលេខា & ទីតាំង GPS)
+                ម៉ាស៊ីនស្កែនវត្តមាន (ហត្ថលេខាផ្ទាល់ក្រដាស)
               </h3>
               <p className="text-[11px] text-brand-brown-muted">ប្រព័ន្ធស្កែនដៅវីធីវត្តមានរហ័ស តាមរយៈការថតរូបហត្ថលេខាផ្ទាល់ក្រដាស</p>
             </div>
@@ -589,69 +531,10 @@ export default function QuickScanModal({
             )}
           </div>
 
-          {/* Location tracking radar and telemetry info */}
-          <div className="pt-3 border-t border-brand-clay">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-bold text-brand-brown flex items-center gap-1">
-                <MapPin className="h-4 w-4 text-brand-green animate-bounce" />
-                <span>ចាប់យកទីតាំង GPS ពិតប្រាកដ (Geolocation)</span>
-              </span>
-              <button
-                type="button"
-                onClick={fetchLocation}
-                disabled={loadingLocation}
-                className="text-[11px] text-brand-green hover:text-brand-brown font-bold flex items-center gap-1 hover:bg-brand-sand px-2 py-1 rounded-lg transition-colors disabled:opacity-50"
-                id="radar-re-fetch-btn"
-              >
-                {loadingLocation ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3 w-3" />
-                )}
-                <span>ស្កែនទីតាំងឡើងវិញ</span>
-              </button>
-            </div>
-
-            {loadingLocation ? (
-              <div className="bg-brand-sand-light border border-brand-clay rounded-xl p-3 flex items-center justify-center gap-2.5 text-xs text-brand-brown-muted">
-                <Loader2 className="h-4 w-4 animate-spin text-brand-green" />
-                <span>ប្រព័ន្ធ Radar កំពុងស្កែន និងទាញយកកូអរដោនេភូមិសាស្ត្រ...</span>
-              </div>
-            ) : locationError ? (
-              <div className="bg-brand-accent/5 border border-brand-accent/20 text-brand-brown rounded-xl p-3 text-xs space-y-1">
-                <div className="flex items-center gap-1.5 font-bold text-brand-green">
-                  <AlertTriangle className="h-3.5 w-3.5 text-brand-accent" />
-                  <span>ការចាប់យកទីតាំងមានដែនកំណត់</span>
-                </div>
-                <p className="text-brand-brown-muted text-[11px]">{locationError}</p>
-                <div className="text-[10px] bg-white/70 border border-brand-clay p-1.5 rounded text-brand-brown-muted font-medium">
-                  {gpsLocation && (
-                    <span>ប្រព័ន្ធផ្តល់ទីតាំងបណ្តោះអាសន្ន៖ Lat: {gpsLocation.latitude.toFixed(5)}, Lng: {gpsLocation.longitude.toFixed(5)}</span>
-                  )}
-                </div>
-              </div>
-            ) : gpsLocation ? (
-              <div className="bg-brand-sand/40 border border-brand-clay rounded-xl p-3 text-[11px] grid grid-cols-2 gap-2">
-                <div>
-                  <span className="text-brand-brown-muted block">រយៈទទឹង (Latitude)</span>
-                  <strong className="font-bold text-brand-green font-mono">{gpsLocation.latitude.toFixed(6)}</strong>
-                </div>
-                <div>
-                  <span className="text-brand-brown-muted block">រយៈបណ្តោយ (Longitude)</span>
-                  <strong className="font-bold text-brand-green font-mono">{gpsLocation.longitude.toFixed(6)}</strong>
-                </div>
-                <div className="col-span-2 pt-1 border-t border-brand-clay/50 flex justify-between text-[10px] text-brand-brown-muted">
-                  <span>ភាពត្រឹមត្រូវ៖ ±{Math.round(gpsLocation.accuracy || 10)} ម៉ែត្រ</span>
-                  <span>ពេលវេលាស្កែន៖ {gpsLocation.timestamp}</span>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          {/* Quick Informational Notice */}
+           {/* Quick Informational Notice */}
           <div className="bg-brand-sand-light/50 border border-brand-clay/40 rounded-xl p-2.5 flex items-start gap-2 text-[10px] text-brand-brown-muted">
             <Info className="h-3.5 w-3.5 text-brand-green mt-0.5 flex-shrink-0" />
-            <p><strong>របៀបប្រើប្រាស់៖</strong> សូមជ្រើសរើសឈ្មោះលោកគ្រូ/អ្នកគ្រូ រួចជ្រើសរើសប្រភេទវត្តមាន។ បន្ទាប់មក ថតហត្ថលេខាពីក្រដាសផ្ទាល់របស់អ្នក ឬបង្ហោះរូបភាពហត្ថលេខាដែលបានថតទុក។ ប្រព័ន្ធនឹងស្កែនចម្រោះយកតែទឹកខ្មៅហត្ថលេខាចេញ និងកត់ត្រាទីតាំងរបស់អ្នកក្នុងពេលព្រមគ្នា។</p>
+            <p><strong>របៀបប្រើប្រាស់៖</strong> សូមជ្រើសរើសឈ្មោះលោកគ្រូ/អ្នកគ្រូ រួចជ្រើសរើសប្រភេទវត្តមាន។ បន្ទាប់មក ថតហត្ថលេខាពីក្រដាសផ្ទាល់របស់អ្នក ឬបង្ហោះរូបភាពហត្ថលេខាដែលបានថតទុក។ ប្រព័ន្ធនឹងស្កែនចម្រោះយកតែទឹកខ្មៅហត្ថលេខាចេញដើម្បីកត់ត្រាវត្តមានលឿនរហ័ស។</p>
           </div>
 
         </div>
@@ -670,12 +553,12 @@ export default function QuickScanModal({
           </button>
           <button
             onClick={handleConfirmSave}
-            disabled={!selectedTeacherId || !processedSignature || loadingLocation}
+            disabled={!selectedTeacherId || !processedSignature}
             className="w-full sm:w-auto px-5 py-2 text-sm font-bold text-white bg-brand-green hover:bg-[#3d4d38] disabled:bg-brand-clay disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer"
             id="confirm-quick-scan-modal"
           >
             <CheckCircle2 className="h-4 w-4" />
-            <span>បញ្ជាក់ការស្កែនវត្តមាន & ទីតាំង</span>
+            <span>បញ្ជាក់ការស្កែនវត្តមាន & ហត្ថលេខា</span>
           </button>
         </div>
       </div>

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, 
   Download, 
@@ -49,6 +49,15 @@ import ShowGroupQrModal from './components/ShowGroupQrModal';
 import { exportToExcel, exportToWord, printPDFLayout } from './utils/exportUtils';
 import { QrCode } from 'lucide-react';
 import { calculateMinutesLate } from './utils/timeUtils';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer 
+} from 'recharts';
 
 function getKhmerSolarRaw(dateStr: string): string {
   try {
@@ -136,6 +145,91 @@ export default function App() {
 
   // Notice alerts messages
   const [alertMessage, setAlertMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
+
+  // Draft Autosave States
+  const [hasDraftToRestore, setHasDraftToRestore] = useState(false);
+  const [draftRecords, setDraftRecords] = useState<AttendanceRecord[] | null>(null);
+  const [isDraftAutosaved, setIsDraftAutosaved] = useState(false);
+  const [lastAutosaveTime, setLastAutosaveTime] = useState<string | null>(null);
+
+  // Store ref for the latest attendanceRecords to prevent stale closure in interval
+  const attendanceRecordsRef = useRef(attendanceRecords);
+  useEffect(() => {
+    attendanceRecordsRef.current = attendanceRecords;
+  }, [attendanceRecords]);
+
+  // Check for unsaved draft on mount
+  useEffect(() => {
+    const draft = localStorage.getItem('draft_storage');
+    if (draft) {
+      try {
+        const parsed = JSON.parse(draft) as AttendanceRecord[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Compare with active loaded attendanceRecords
+          const currentSaved = localStorage.getItem('ou_sralau_attendance_records');
+          if (currentSaved) {
+            try {
+              const currentParsed = JSON.parse(currentSaved);
+              // Simple check: if different string content or size, offer restore
+              if (JSON.stringify(parsed) !== JSON.stringify(currentParsed)) {
+                setDraftRecords(parsed);
+                setHasDraftToRestore(true);
+              }
+            } catch (e) {
+              setDraftRecords(parsed);
+              setHasDraftToRestore(true);
+            }
+          } else {
+            // No saved records at all but draft has some
+            setDraftRecords(parsed);
+            setHasDraftToRestore(true);
+          }
+        }
+      } catch (e) {
+        console.error("Error loading draft_storage", e);
+      }
+    }
+  }, []);
+
+  // Set up 30-second draft autosave interval
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const recordsToSave = attendanceRecordsRef.current;
+      if (recordsToSave && recordsToSave.length > 0) {
+        try {
+          localStorage.setItem('draft_storage', JSON.stringify(recordsToSave));
+          const timeString = new Date().toLocaleTimeString('km-KH');
+          setLastAutosaveTime(timeString);
+          setIsDraftAutosaved(true);
+          // Hide feedback badge after 3 seconds
+          const timeout = setTimeout(() => setIsDraftAutosaved(false), 3000);
+          return () => clearTimeout(timeout);
+        } catch (e) {
+          console.error("Error autosaving to draft_storage", e);
+        }
+      }
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Handler to Restore Draft
+  const handleRestoreDraft = () => {
+    if (draftRecords) {
+      saveRecordsToStorage(draftRecords);
+      triggerAlert('បានស្ដារព័ត៌មានវត្តមានពីឯកសារព្រាងជោគជ័យ!', 'success');
+      setHasDraftToRestore(false);
+      setDraftRecords(null);
+    }
+  };
+
+  // Handler to Discard Draft
+  const handleDiscardDraft = () => {
+    localStorage.removeItem('draft_storage');
+    setHasDraftToRestore(false);
+    setDraftRecords(null);
+    triggerAlert('បានលុបចោលឯកសារព្រាងដោយជោគជ័យ!', 'info');
+  };
 
   // 1. Ensure Initial Data is saved in LocalStorage if blank
   useEffect(() => {
@@ -300,6 +394,56 @@ export default function App() {
       saveRecordsToStorage(updated);
       triggerAlert('បានលុបការចុះឈ្មោះវត្តមានថ្ងៃនេះដោយជោគជ័យ!', 'info');
     }
+  };
+
+  const handleDeleteTeacher = (teacherId: string) => {
+    const teacher = teachers.find((t) => t.id === teacherId);
+    if (!teacher) return;
+
+    if (window.confirm(`តើអ្នកពិតជាចង់លុបលោកគ្រូ/អ្នកគ្រូ៖ ${teacher.name} ជាអចិន្ត្រៃយ៍ពីបញ្ជីឈ្មោះគ្រូទាំងមូលមែនទេ? (នឹងលុបទិន្នន័យវត្តមានទាំងអស់របស់គាត់)`)) {
+      // 1. Remove from master teachers roster
+      const updatedRoster = teachers.filter((t) => t.id !== teacherId);
+      setTeachers(updatedRoster);
+      localStorage.setItem('ou_sralau_teachers_roster', JSON.stringify(updatedRoster));
+
+      // 2. Also remove their attendance records permanently
+      const updatedRecords = attendanceRecords.filter((rec) => rec.teacherId !== teacherId);
+      saveRecordsToStorage(updatedRecords);
+
+      triggerAlert(`បានលុបលោកគ្រូ/អ្នកគ្រូ៖ ${teacher.name} ចេញពីបញ្ជីគ្រូទាំងស្រុងដោយជោគជ័យ!`, 'info');
+    }
+  };
+
+  const handleMassCheckIn = (recordIds: string[], mode: 'in' | 'out', signatureBase64: string | null) => {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('km-KH', { hour12: false });
+
+    const defaultMassSignature = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='60' viewBox='0 0 160 60'><rect width='100%' height='100%' fill='%23F4EDE2' rx='8' stroke='%234A5D45' stroke-width='2'/><text x='50%' y='40%' font-size='11' font-family='sans-serif' font-weight='bold' fill='%234A5D45' text-anchor='middle'>MASS CHECK-IN</text><text x='50%' y='70%' font-size='10' font-family='sans-serif' font-weight='bold' fill='%23D48D3B' text-anchor='middle'>វត្តមានរួមគ្នា (Flag)</text></svg>`;
+
+    const finalSignature = signatureBase64 || defaultMassSignature;
+
+    const updated = attendanceRecords.map((rec) => {
+      if (recordIds.includes(rec.id)) {
+        if (mode === 'in') {
+          return {
+            ...rec,
+            timeIn: rec.timeIn || timeStr,
+            minutesLate: rec.timeIn ? rec.minutesLate : calculateMinutesLate(timeStr, rec.shift),
+            signatureIn: rec.signatureIn || finalSignature,
+          };
+        } else {
+          return {
+            ...rec,
+            timeOut: rec.timeOut || timeStr,
+            signatureOut: rec.signatureOut || finalSignature,
+          };
+        }
+      }
+      return rec;
+    });
+
+    saveRecordsToStorage(updated);
+    triggerAlert(`បានដៅវត្តមានរួមគ្នា (${mode === 'in' ? 'ចូល' : 'ចេញ'}) សម្រាប់លោកគ្រូ/អ្នកគ្រូចំនួន ${recordIds.length} នាក់ដោយជោគជ័យ!`);
   };
 
   const handleSaveQuickScan = (teacherId: string, type: 'in' | 'out', signatureBase64: string, locationObj?: any) => {
@@ -621,6 +765,40 @@ export default function App() {
           <Header selectedSchool={filterSchool} />
         </div>
 
+        {/* Unsaved draft banner alert */}
+        {hasDraftToRestore && (
+          <div className="bg-amber-50/70 border border-amber-200 rounded-[32px] p-5 sm:p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-fade-in print:hidden">
+            <div className="flex gap-3">
+              <div className="p-2.5 bg-amber-100 rounded-2xl text-amber-700 flex-shrink-0 flex items-center justify-center">
+                <RefreshCw className="h-5 w-5 text-amber-600" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-brand-brown">
+                  រកឃើញទិន្នន័យព្រាងចុងក្រោយក្នុងឧបករណ៍ (Autosaved Draft Detected)
+                </h4>
+                <p className="text-xs text-brand-brown-muted leading-relaxed">
+                  ប្រព័ន្ធបានរកឃើញទិន្នន័យវត្តមានដែលត្រូវបានរក្សាទុកដោយស្វ័យប្រវត្តក្នុងឧបករណ៍នេះ ដែលខុសពីទិន្នន័យបច្ចុប្បន្ន។ តើលោកអ្នកចង់ស្ដារទិន្នន័យវត្តមាននោះឡើងវិញដែរឬទេ?
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 w-full md:w-auto justify-end flex-wrap">
+              <button
+                onClick={handleDiscardDraft}
+                className="px-4 py-2 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+              >
+                លុបចោល (Discard Draft)
+              </button>
+              <button
+                onClick={handleRestoreDraft}
+                className="px-4.5 py-2 text-xs font-bold text-white bg-brand-green hover:bg-[#3d4d38] rounded-xl shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <CheckCircle className="h-3.5 w-3.5 animate-pulse" />
+                <span>ស្ដារឡើងវិញ (Restore Draft)</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Meeting & Backup Controls Strip */}
         <div className="bg-white rounded-[32px] border border-brand-clay shadow-sm p-4 sm:p-6 print:hidden flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4" id="date-selector-container">
           {/* Main Context Setters */}
@@ -659,6 +837,17 @@ export default function App() {
 
           {/* Backup Database utilities */}
           <div className="flex items-center md:justify-end gap-3 pt-2 md:pt-0 border-t md:border-t-0 border-brand-clay flex-wrap">
+            {isDraftAutosaved ? (
+              <span className="text-[11px] font-bold text-brand-green flex items-center gap-1 animate-pulse mr-2 bg-brand-green/5 border border-brand-green/20 px-2.5 py-1 rounded-lg">
+                <CheckCircle className="h-3.5 w-3.5" />
+                <span>រក្សាទុកព្រាងស្វ័យប្រវត្តរួចរាល់...</span>
+              </span>
+            ) : lastAutosaveTime ? (
+              <span className="text-[10px] text-brand-brown-muted font-medium mr-2 bg-brand-sand-light/60 border border-brand-clay/30 px-2 py-1 rounded-lg">
+                រក្សាទុកព្រាងចុងក្រោយ៖ <strong className="font-bold font-mono">{lastAutosaveTime}</strong>
+              </span>
+            ) : null}
+
             <button
               onClick={() => setIsManageSchoolsOpen(true)}
               className="px-3.5 py-1.5 text-xs font-bold text-brand-brown bg-white border border-brand-clay hover:bg-brand-sand rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
@@ -763,6 +952,76 @@ export default function App() {
                 <span className="text-xs text-brand-brown-muted font-normal ml-1">/ {statistics.signedInCount}</span>
               </strong>
               <span className="text-[10px] text-brand-accent block mt-0.5 font-bold">បញ្ចប់ការប្រជុំ</span>
+            </div>
+          </div>
+
+          {/* Recharts BarChart for school statistics */}
+          <div className="col-span-2 md:col-span-4 bg-white p-6 rounded-[32px] border border-brand-clay shadow-sm flex flex-col space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-brand-clay/30 pb-3">
+              <div>
+                <h4 className="text-sm font-bold text-brand-brown font-sans">
+                  ស្ថិតិវត្តមានតាមសាលារៀន (Attendance by School Ratio)
+                </h4>
+                <p className="text-[11px] text-brand-brown-muted mt-0.5">
+                  ការប្រៀបធៀបចំនួនគ្រូមានវត្តមាន ធៀបនឹងចំនួនគ្រូសរុបតាមសាលានីមួយៗ
+                </p>
+              </div>
+              <div className="flex items-center gap-4 text-xs font-semibold text-brand-brown-muted">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-sm bg-[#4A5D45]"></span>
+                  <span>វត្តមាន (Present)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-sm bg-[#9A8478]"></span>
+                  <span>សរុប (Total)</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="w-full h-[320px] pt-2 select-none">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={statistics.schoolStats}
+                  margin={{ top: 20, right: 10, left: -20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8E1D5" />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{ fill: '#6B5E55', fontSize: 11, fontFamily: 'sans-serif', fontWeight: 600 }}
+                    axisLine={{ stroke: '#DED0C1' }} 
+                    tickLine={false}
+                  />
+                  <YAxis 
+                    tick={{ fill: '#6B5E55', fontSize: 11, fontFamily: 'monospace' }}
+                    axisLine={{ stroke: '#DED0C1' }} 
+                    tickLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip 
+                    cursor={{ fill: 'rgba(232, 225, 213, 0.2)' }}
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        const ratio = data.total > 0 ? Math.round((data.present / data.total) * 100) : 0;
+                        return (
+                          <div className="bg-white p-3 border border-brand-clay rounded-2xl shadow-lg space-y-1.5 text-xs">
+                            <p className="font-bold text-brand-brown border-b border-brand-clay/40 pb-1">{data.name}</p>
+                            <p className="text-brand-brown-muted font-medium">
+                              គ្រូសរុប (Total): <span className="font-bold text-brand-brown font-mono">{data.total}</span> នាក់
+                            </p>
+                            <p className="text-brand-green font-bold">
+                              វត្តមាន (Present): <span className="font-bold font-mono">{data.present}</span> នាក់ ({ratio}%)
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar dataKey="total" fill="#9A8478" radius={[6, 6, 0, 0]} maxBarSize={45} name="សរុប" />
+                  <Bar dataKey="present" fill="#4A5D45" radius={[6, 6, 0, 0]} maxBarSize={45} name="វត្តមាន" />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
         </div>
@@ -936,6 +1195,8 @@ export default function App() {
           onQrClick={handleOpenQrCode}
           onUpdateRemarks={handleUpdateRemarks}
           onRemoveRecord={handleRemoveRecord}
+          onDeleteTeacher={handleDeleteTeacher}
+          onMassCheckIn={handleMassCheckIn}
           filterShift={filterShift}
           filterGender={filterGender}
           filterSchool={filterSchool}
