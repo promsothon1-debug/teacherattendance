@@ -24,7 +24,8 @@ import {
   AlertCircle,
   ScanLine,
   School,
-  ClipboardList
+  ClipboardList,
+  History
 } from 'lucide-react';
 
 import { 
@@ -48,7 +49,7 @@ import DailySummaryModal from './components/DailySummaryModal';
 import ShowGroupQrModal from './components/ShowGroupQrModal';
 import { exportToExcel, exportToWord, printPDFLayout } from './utils/exportUtils';
 import { QrCode } from 'lucide-react';
-import { calculateMinutesLate } from './utils/timeUtils';
+import { calculateMinutesLate, toKhmerNumber } from './utils/timeUtils';
 import { 
   BarChart, 
   Bar, 
@@ -703,6 +704,59 @@ export default function App() {
     };
   })();
 
+  // 9.5 Recent Attendance Days List calculations
+  const recentDaysList = (() => {
+    const datesMap: Record<string, { total: number; present: number }> = {};
+    
+    // Aggregate status from all saved attendance records
+    attendanceRecords.forEach((rec) => {
+      if (!datesMap[rec.date]) {
+        datesMap[rec.date] = { total: 0, present: 0 };
+      }
+      datesMap[rec.date].total++;
+      if ((rec.timeIn && rec.signatureIn) || (rec.timeOut && rec.signatureOut)) {
+        datesMap[rec.date].present++;
+      }
+    });
+
+    // Get unique dates sorting descending (newest first)
+    const uniqueDates = Object.keys(datesMap).sort((a, b) => b.localeCompare(a));
+
+    // Ensure the current selectedDate is included so users can easily toggle and see active stats
+    const sliceDays = uniqueDates.slice(0, 5);
+    if (!sliceDays.includes(selectedDate)) {
+      sliceDays.push(selectedDate);
+    }
+    
+    // Re-sort descending
+    sliceDays.sort((a, b) => b.localeCompare(a));
+
+    return sliceDays.slice(0, 5).map((date) => {
+      const stats = datesMap[date] || { total: teachers.length, present: 0 };
+      return {
+        date,
+        total: stats.total,
+        present: stats.present
+      };
+    });
+  })();
+
+  const getKhmerShortDateChange = (dateStr: string): string => {
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const day = d.getDate();
+      const month = d.getMonth();
+      const khmerMonths = [
+        'មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា',
+        'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'
+      ];
+      return `ថ្ងៃទី ${toKhmerNumber(day)} ${khmerMonths[month]}`;
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   // 10. Check URL query parameters for mobile self-signing QR check-in mode
   const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
   const paramAction = urlParams.get('action'); // 'qr_sign'
@@ -891,6 +945,51 @@ export default function App() {
             >
               <Trash2 className="h-4 w-4" />
             </button>
+          </div>
+        </div>
+
+        {/* Recent Attendance Days Quick Switcher */}
+        <div className="bg-brand-sand-light/50 border border-brand-clay rounded-[32px] p-4 sm:p-5 print:hidden flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 animate-fade-in" id="recent-attendance-switcher">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-brand-green/15 text-brand-green rounded-2xl flex-shrink-0 flex items-center justify-center">
+              <History className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-brand-brown font-sans">
+                កាលបរិច្ឆេទប្រជុំថ្មីៗ (Recent Meetings)
+              </h4>
+              <p className="text-[11px] text-brand-brown-muted mt-0.5">
+                ជ្រើសរើសដើម្បីប្ដូរទៅកាន់កាលបរិច្ឆេទប្រជុំមុនៗបានរហ័ស
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            {recentDaysList.map((item) => {
+              const isActive = item.date === selectedDate;
+              return (
+                <button
+                  key={item.date}
+                  onClick={() => setSelectedDate(item.date)}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer select-none ${
+                    isActive
+                      ? 'bg-brand-green text-white border-brand-green shadow-xs'
+                      : 'bg-white text-brand-brown border-brand-clay/70 hover:bg-brand-sand hover:border-brand-brown-muted shadow-2xs'
+                  }`}
+                  id={`recent-date-btn-${item.date}`}
+                  title={`មើលវត្តមានថ្ងៃទី ${item.date}`}
+                >
+                  <span className="font-sans">{getKhmerShortDateChange(item.date)}</span>
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold font-mono tracking-wide leading-none ${
+                    isActive 
+                      ? 'bg-white/20 text-white' 
+                      : 'bg-brand-sand-light text-brand-brown-muted border border-brand-clay/40'
+                  }`}>
+                    {toKhmerNumber(item.present)}/{toKhmerNumber(item.total)}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
