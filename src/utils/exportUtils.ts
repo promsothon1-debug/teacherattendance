@@ -5,6 +5,7 @@
 
 import * as XLSX from 'xlsx';
 import { AttendanceRecord } from '../types';
+import { toKhmerNumber } from './timeUtils';
 
 /**
  * Utility to convert raw Base64 image to image size suitable for tables
@@ -33,7 +34,7 @@ export function exportToExcel(records: AttendanceRecord[], meetingDate: string) 
     'សាលារៀន': rec.school,
     'តួនាទី / ឯកទេស': rec.role,
     'វេនបង្រៀន': rec.shift,
-    'ម៉ោងចូល': rec.timeIn || 'មិនទាន់ចូល',
+    'ម៉ោងចូល': rec.timeIn ? (rec.minutesLate ? `${rec.timeIn} (យឺត ${toKhmerNumber(rec.minutesLate)} នាទី)` : rec.timeIn) : 'មិនទាន់ចូល',
     'ទីតាំងចូល GPS': rec.locationIn ? `${rec.locationIn.latitude.toFixed(5)}, ${rec.locationIn.longitude.toFixed(5)}` : 'គ្មាន',
     'ហត្ថលេខាចូល': rec.signatureIn ? 'បានចុះឈ្មោះ' : 'គ្មាន',
     'ម៉ោងចេញ': rec.timeOut || 'មិនទាន់ចេញ',
@@ -126,8 +127,8 @@ export function exportToWord(records: AttendanceRecord[], meetingDate: string, s
         <td style="border:solid #cbd5e1 1.0pt; padding:6px; text-align:center; font-family:'Khmer OS Battambang', 'Inter', sans-serif; font-size:9.5pt;">
           ${rec.shift}
         </td>
-        <td style="border:solid #cbd5e1 1.0pt; padding:6px; text-align:center; font-family:'Consolas', monospace; font-size:9.5pt; color: #0284c7;">
-          ${rec.timeIn || '-'}
+        <td style="border:solid #cbd5e1 1.0pt; padding:6px; text-align:center; font-family:'Khmer OS Battambang', 'Consolas', monospace; font-size:9pt; color: #b45309;">
+          ${rec.timeIn ? (rec.minutesLate ? `${rec.timeIn}<br><span style="color: #dc2626; font-size: 8pt; font-weight: bold;">យឺត ${toKhmerNumber(rec.minutesLate)} នាទី</span>` : rec.timeIn) : '-'}
         </td>
         <td style="border:solid #cbd5e1 1.0pt; padding:6px; text-align:center;">
           ${rec.signatureIn ? cleanBase64ForWord(rec.signatureIn) : '-'}

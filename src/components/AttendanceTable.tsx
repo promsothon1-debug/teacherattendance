@@ -19,6 +19,7 @@ import {
   QrCode
 } from 'lucide-react';
 import { AttendanceRecord, Gender, Shift } from '../types';
+import { calculateMinutesLate, toKhmerNumber } from '../utils/timeUtils';
 
 interface AttendanceTableProps {
   records: AttendanceRecord[];
@@ -278,9 +279,22 @@ export default function AttendanceTable({
                                 {rec.timeIn}
                               </span>
                               {isLate && (
-                                <span className="text-[9px] font-bold text-red-700 bg-red-50 border border-red-100 px-1 py-0.5 rounded tracking-wide font-sans select-none animate-pulse">
-                                  យឺត (Late)
-                                </span>
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span className="text-[9px] font-bold text-red-700 bg-red-50 border border-red-100 px-1 py-0.5 rounded tracking-wide font-sans select-none">
+                                    យឺត (Late)
+                                  </span>
+                                  {(() => {
+                                    const mins = rec.minutesLate !== undefined ? rec.minutesLate : calculateMinutesLate(rec.timeIn, rec.shift);
+                                    if (mins > 0) {
+                                      return (
+                                        <span className="text-[10px] font-extrabold text-red-600 bg-red-50/50 px-1.5 py-0.5 rounded border border-red-100/60 font-mono">
+                                          +{toKhmerNumber(mins)} នាទី ({mins}m)
+                                        </span>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
+                                </div>
                               )}
                             </div>
                           );

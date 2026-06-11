@@ -40,6 +40,7 @@ export interface AttendanceRecord {
   shift: Shift;
   date: string; // YYYY-MM-DD
   timeIn?: string; // HH:MM:SS
+  minutesLate?: number; // Minutes late relative to late threshold/start time
   signatureIn?: string; // Base64 data URL
   locationIn?: GPSLocation;
   timeOut?: string; // HH:MM:SS

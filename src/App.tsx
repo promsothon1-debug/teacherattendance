@@ -45,8 +45,10 @@ import ShowQrModal from './components/ShowQrModal';
 import QRScannerModal from './components/QRScannerModal';
 import MobileSignScreen from './components/MobileSignScreen';
 import DailySummaryModal from './components/DailySummaryModal';
+import ShowGroupQrModal from './components/ShowGroupQrModal';
 import { exportToExcel, exportToWord, printPDFLayout } from './utils/exportUtils';
 import { QrCode } from 'lucide-react';
+import { calculateMinutesLate } from './utils/timeUtils';
 
 function getKhmerSolarRaw(dateStr: string): string {
   try {
@@ -127,6 +129,7 @@ export default function App() {
   const [qrActiveRecord, setQrActiveRecord] = useState<AttendanceRecord | null>(null);
   const [qrActiveMode, setQrActiveMode] = useState<'in' | 'out'>('in');
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+  const [isGroupQrOpen, setIsGroupQrOpen] = useState(false);
 
   // Daily Summary Report modal state
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
@@ -259,6 +262,7 @@ export default function App() {
           return {
             ...rec,
             timeIn: timeStr,
+            minutesLate: calculateMinutesLate(timeStr, rec.shift),
             signatureIn: signatureBase64,
             locationIn: locationObj
           };
@@ -316,6 +320,7 @@ export default function App() {
             return {
               ...rec,
               timeIn: timeStr,
+              minutesLate: calculateMinutesLate(timeStr, rec.shift),
               signatureIn: signatureBase64,
               locationIn: locationObj
             };
@@ -341,6 +346,7 @@ export default function App() {
         shift: teacher.shift,
         date: selectedDate,
         timeIn: type === 'in' ? timeStr : undefined,
+        minutesLate: type === 'in' ? calculateMinutesLate(timeStr, teacher.shift) : undefined,
         signatureIn: type === 'in' ? signatureBase64 : undefined,
         locationIn: type === 'in' ? locationObj : undefined,
         timeOut: type === 'out' ? timeStr : undefined,
@@ -380,6 +386,7 @@ export default function App() {
             return {
               ...r,
               timeIn: data.time,
+              minutesLate: calculateMinutesLate(data.time, r.shift),
               signatureIn: data.signature,
               locationIn: locationObj,
             };
@@ -407,6 +414,7 @@ export default function App() {
         shift: tInfo.shift,
         date: data.date,
         timeIn: data.mode === 'in' ? data.time : undefined,
+        minutesLate: data.mode === 'in' ? calculateMinutesLate(data.time, tInfo.shift) : undefined,
         signatureIn: data.mode === 'in' ? data.signature : undefined,
         locationIn: data.mode === 'in' ? locationObj : undefined,
         timeOut: data.mode === 'out' ? data.time : undefined,
@@ -874,10 +882,21 @@ export default function App() {
 
             {/* Action Buttons (Scan QR, Quick Scan & Add Teacher) */}
             <div className="md:col-span-3 flex flex-col sm:flex-row gap-1.5">
+              {/* Group QR button */}
+              <button
+                onClick={() => setIsGroupQrOpen(true)}
+                className="px-2 py-2 text-[12px] sm:text-[12.5px] font-bold text-white bg-amber-600 hover:bg-amber-700 active:scale-95 transition-all rounded-xl flex items-center justify-center gap-1 cursor-pointer w-full"
+                id="open-group-qr-btn"
+                title="បង្កើតកូដ QR រួមដើម្បីឱ្យលោកគ្រូ-អ្នកគ្រូស្កេនចុះវត្តមានដោយខ្លួនឯង"
+              >
+                <QrCode className="h-4.5 w-4.5 text-brand-sand" />
+                <span>កូដ QR រួម</span>
+              </button>
+
               {/* Scan QR button */}
               <button
                 onClick={() => setIsQrScannerOpen(true)}
-                className="px-2.5 py-2 text-[12.5px] font-bold text-white bg-teal-700 hover:bg-teal-800 active:scale-95 transition-all rounded-xl flex items-center justify-center gap-1 cursor-pointer w-full"
+                className="px-2 py-2 text-[12px] sm:text-[12.5px] font-bold text-white bg-teal-700 hover:bg-teal-800 active:scale-95 transition-all rounded-xl flex items-center justify-center gap-1 cursor-pointer w-full"
                 id="open-qr-scanner-btn"
                 title="ស្កេនកូដ QR ហត្ថលេខាបញ្ជាក់ពីទូរស័ព្ទរបស់គ្រូ"
               >
@@ -1028,6 +1047,15 @@ export default function App() {
           date={selectedDate}
           records={currentDaysRecords}
           teachers={teachers}
+        />
+      )}
+
+      {/* Show Group QR Code Modal */}
+      {isGroupQrOpen && (
+        <ShowGroupQrModal
+          isOpen={isGroupQrOpen}
+          onClose={() => setIsGroupQrOpen(false)}
+          date={selectedDate}
         />
       )}
     </div>

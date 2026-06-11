@@ -15,7 +15,9 @@ import {
   QrCode, 
   Clock, 
   FileCheck,
-  ChevronLeft
+  ChevronLeft,
+  Search,
+  School
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { Teacher, GPSLocation, Gender, Shift } from '../types';
@@ -28,7 +30,11 @@ interface MobileSignScreenProps {
 }
 
 export default function MobileSignScreen({ teacherId, mode, date, teachers }: MobileSignScreenProps) {
-  const teacher = teachers.find(t => t.id === teacherId);
+  const [chosenTeacherId, setChosenTeacherId] = useState(teacherId === 'select' ? '' : teacherId);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterSchool, setFilterSchool] = useState('');
+
+  const teacher = teachers.find(t => t.id === chosenTeacherId);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -52,7 +58,7 @@ export default function MobileSignScreen({ teacherId, mode, date, teachers }: Mo
 
   // Initialize canvas
   useEffect(() => {
-    if (isSubmitted || !canvasRef.current) return;
+    if (isSubmitted || !canvasRef.current || !teacher) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -68,7 +74,7 @@ export default function MobileSignScreen({ teacherId, mode, date, teachers }: Mo
 
     // Auto-fetch location on mobile screen load
     fetchLocation();
-  }, [isSubmitted]);
+  }, [isSubmitted, teacher]);
 
   const fetchLocation = () => {
     setLoadingLocation(true);
@@ -207,7 +213,7 @@ export default function MobileSignScreen({ teacherId, mode, date, teachers }: Mo
 
     // Build the extremely compact object package to fit safely into QR standard structure
     const attendancePayload = {
-      tId: teacherId,
+      tId: chosenTeacherId,
       dt: date,
       m: mode,
       ti: currentTime,
@@ -244,6 +250,124 @@ export default function MobileSignScreen({ teacherId, mode, date, teachers }: Mo
     setIsSubmitted(false);
     setVerificationQrUrl('');
   };
+
+  if (chosenTeacherId === '') {
+    // Unique schools list from teachers roster
+    const uniqueSchools = Array.from(new Set(teachers.map(t => t.school)));
+
+    // Filter teachers based on search query and school selection
+    const filteredTeachers = teachers.filter(t => {
+      const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            t.role.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSchool = filterSchool === '' || t.school === filterSchool;
+      return matchesSearch && matchesSchool;
+    });
+
+    return (
+      <div className="min-h-screen bg-stone-50 text-stone-800 pb-12 font-sans select-none">
+        {/* Top Header Accent */}
+        <div className="bg-brand-brown text-brand-sand px-4 py-4 sticky top-0 z-20 shadow-md">
+          <div className="max-w-md mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-brand-accent animate-pulse" />
+              <h1 className="font-bold text-xs md:text-sm tracking-wide font-khmer-muol text-brand-sand">
+                ចុះវត្តមានរួម - កម្រងអូរស្រឡៅ
+              </h1>
+            </div>
+            <span className="text-[11px] font-semibold text-brand-accent bg-white/10 px-2 py-0.5 rounded-full font-mono">
+              {currentTime}
+            </span>
+          </div>
+        </div>
+
+        <div className="max-w-md mx-auto px-4 pt-5 space-y-4 animate-fade-in">
+          {/* Main Title Instruction Card */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-brand-clay/40 text-center space-y-1.5 relative overflow-hidden">
+            <div className="absolute top-0 inset-x-0 h-1 bg-brand-green" />
+            <QrCode className="h-8 w-8 text-brand-green mx-auto mb-2 animate-bounce" />
+            <h2 className="text-base font-bold text-stone-900 font-sans">សូមស្វែងរក និងជ្រើសរើសឈ្មោះរបស់អ្នក</h2>
+            <p className="text-xs text-stone-500 leading-relaxed font-semibold">
+              លោកគ្រូ-អ្នកគ្រូ គ្រាន់តែវាយឈ្មោះ ឬតួនាទី រួចចុចលើប៊ូតុងរបស់ឈ្មោះខ្លួនដើម្បីចុះវត្តមាន។
+            </p>
+            <div className="inline-flex items-center gap-1.5 bg-brand-accent/10 text-brand-accent px-2.5 py-1 rounded-full text-[11px] font-bold mt-2 font-mono">
+              <span>វត្តមាន {mode === 'in' ? 'ចូលប្រជុំ (Check-in)' : 'ចេញប្រជុំ (Check-out)'}</span>
+            </div>
+          </div>
+
+          {/* Filter Toolbar */}
+          <div className="p-4 bg-white rounded-2xl shadow-sm border border-brand-clay/35 space-y-3">
+            {/* Name Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-4.5 w-4.5 text-stone-400" />
+              <input
+                type="text"
+                placeholder="ស្វែងរកឈ្មោះ ឬតួនាទី..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs border border-brand-clay rounded-xl text-stone-800 bg-white focus:outline-none focus:border-brand-green transition-all"
+              />
+            </div>
+
+            {/* School filter */}
+            <div className="relative">
+              <School className="absolute left-3 top-2.5 h-4.5 w-4.5 text-stone-400" />
+              <select
+                value={filterSchool}
+                onChange={(e) => setFilterSchool(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs border border-brand-clay bg-white rounded-xl text-stone-800 focus:outline-none focus:border-brand-green transition-all cursor-pointer font-semibold"
+              >
+                <option value="">សាលារៀន៖ ទាំងអស់</option>
+                {uniqueSchools.map((sch) => (
+                  <option key={sch} value={sch}>{sch}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Match Roster Lists */}
+          <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
+            {filteredTeachers.length === 0 ? (
+              <div className="p-10 text-center bg-white rounded-2xl border border-dashed border-brand-clay/50 text-stone-500">
+                <Search className="h-8 w-8 mx-auto text-stone-300 mb-2" />
+                <p className="text-xs font-bold">រកមិនឃើញលោកគ្រូ-អ្នកគ្រូឡើយ!</p>
+                <p className="text-[11px] text-stone-400 mt-0.5">សូមព្យាយាមវាយឈ្មោះម្តងទៀត</p>
+              </div>
+            ) : (
+              filteredTeachers.map((t) => (
+                <div
+                  key={t.id}
+                  onClick={() => setChosenTeacherId(t.id)}
+                  className="bg-white hover:bg-brand-sand-light/40 active:bg-brand-sand-light border border-brand-clay/35 hover:border-brand-green p-4 rounded-xl flex items-center justify-between gap-3 transition-all cursor-pointer shadow-xs active:scale-[0.99] group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`h-11 w-11 rounded-full flex items-center justify-center text-xs font-bold leading-none flex-shrink-0 border shadow-sm ${
+                      t.gender === Gender.FEMALE 
+                        ? 'bg-pink-50 text-pink-700 border-pink-200' 
+                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    }`}>
+                      {t.gender === Gender.FEMALE ? 'ស្រី' : 'ប្រុស'}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-xs sm:text-sm text-stone-950 truncate font-sans group-hover:text-brand-green transition-colors">
+                        {t.name}
+                      </h4>
+                      <p className="text-[10px] text-brand-brown-muted font-sans truncate pr-1">
+                        {t.role} • {t.school}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex-shrink-0 bg-brand-green/10 text-brand-green font-bold text-[11px] px-2.5 py-1.5 rounded-lg border border-brand-green/20 group-hover:bg-brand-green group-hover:text-white transition-all select-none">
+                    ជ្រើសរើស
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!teacher) {
     return (
@@ -316,6 +440,18 @@ export default function MobileSignScreen({ teacherId, mode, date, teachers }: Mo
                 <span className="text-[10px] text-stone-400 font-sans">
                   កាលបរិច្ឆេទប្រជុំ៖ <strong className="text-stone-600">{date}</strong>
                 </span>
+                {teacherId === 'select' && (
+                  <button
+                    onClick={() => {
+                      setChosenTeacherId('');
+                      clearCanvas();
+                    }}
+                    className="mt-3.5 w-full py-1.5 px-3 rounded-xl border border-red-100 bg-red-50 text-[10.5px] font-bold text-red-700 hover:bg-red-100/60 transition-colors cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>ប្តូរជ្រើសរើសឈ្មោះគ្រូផ្សេង (Switch Teacher)</span>
+                  </button>
+                )}
               </div>
             </div>
 
