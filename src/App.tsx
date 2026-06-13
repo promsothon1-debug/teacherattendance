@@ -129,6 +129,7 @@ export default function App() {
 
   // Modal Control States
   const [isAddTeacherOpen, setIsAddTeacherOpen] = useState(false);
+  const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
   const [isSignatureOpen, setIsSignatureOpen] = useState(false);
   const [isQuickScanOpen, setIsQuickScanOpen] = useState(false);
   const [isManageSchoolsOpen, setIsManageSchoolsOpen] = useState(false);
@@ -375,25 +376,63 @@ export default function App() {
   }, [selectedDate, teachers.length, attendanceRecords.length]);
 
   // 5. Handlers
-  const handleAddNewTeacher = (newTeacher: Teacher) => {
-    // Save to roster list
-    const updatedRoster = [...teachers, newTeacher];
-    saveTeachersToStorage(updatedRoster);
+  const handleAddNewTeacher = (savedTeacher: Teacher) => {
+    // Check if it is an edit or duplicate
+    const exists = teachers.some((t) => t.id === savedTeacher.id);
 
-    // Also immediately insert a record for this teacher on the currently selectedDate
-    const newRecord: AttendanceRecord = {
-      id: `${newTeacher.id}_${selectedDate}`,
-      teacherId: newTeacher.id,
-      name: newTeacher.name,
-      gender: newTeacher.gender,
-      school: newTeacher.school,
-      role: newTeacher.role,
-      shift: newTeacher.shift,
-      date: selectedDate
-    };
+    if (exists) {
+      // It's an EDIT request!
+      const updatedRoster = teachers.map((t) => t.id === savedTeacher.id ? savedTeacher : t);
+      saveTeachersToStorage(updatedRoster);
 
-    saveRecordsToStorage([...attendanceRecords, newRecord]);
-    triggerAlert(`បានចុះឈ្មោះលោកគ្រូ/អ្នកគ្រូ៖ ${newTeacher.name} ដោយជោគជ័យ!`);
+      // Now, update all attendance records for this teacher (including past and currently active records)
+      const updatedRecords = attendanceRecords.map((rec) => {
+        if (rec.teacherId === savedTeacher.id) {
+          return {
+            ...rec,
+            name: savedTeacher.name,
+            gender: savedTeacher.gender,
+            school: savedTeacher.school,
+            role: savedTeacher.role,
+            shift: savedTeacher.shift
+          };
+        }
+        return rec;
+      });
+      saveRecordsToStorage(updatedRecords);
+      triggerAlert(`បានកែសម្រួលព័ត៌មានរបស់លោកគ្រូ/អ្នកគ្រូ៖ ${savedTeacher.name} ដោយជោគជ័យ!`);
+    } else {
+      // It's an ADD request!
+      const updatedRoster = [...teachers, savedTeacher];
+      saveTeachersToStorage(updatedRoster);
+
+      const newRecord: AttendanceRecord = {
+        id: `${savedTeacher.id}_${selectedDate}`,
+        teacherId: savedTeacher.id,
+        name: savedTeacher.name,
+        gender: savedTeacher.gender,
+        school: savedTeacher.school,
+        role: savedTeacher.role,
+        shift: savedTeacher.shift,
+        date: selectedDate
+      };
+
+      saveRecordsToStorage([...attendanceRecords, newRecord]);
+      triggerAlert(`បានចុះឈ្មោះលោកគ្រូ/អ្នកគ្រូ៖ ${savedTeacher.name} ដោយជោគជ័យ!`);
+    }
+    
+    // Clear editing state
+    setEditingTeacher(null);
+  };
+
+  const handleEditTeacherClick = (teacherId: string) => {
+    const teacher = teachers.find(t => t.id === teacherId);
+    if (teacher) {
+      setEditingTeacher(teacher);
+      setIsAddTeacherOpen(true);
+    } else {
+      triggerAlert('រកមិនឃើញព័ត៌មានគ្រូនេះទេ!', 'error');
+    }
   };
 
   const handleOpenSignatureIn = (record: AttendanceRecord) => {
@@ -1459,6 +1498,7 @@ export default function App() {
           onUpdateRemarks={handleUpdateRemarks}
           onRemoveRecord={handleRemoveRecord}
           onDeleteTeacher={handleDeleteTeacher}
+          onEditTeacher={handleEditTeacherClick}
           onMassCheckIn={handleMassCheckIn}
           filterShift={filterShift}
           filterGender={filterGender}
@@ -1507,9 +1547,13 @@ export default function App() {
       {isAddTeacherOpen && (
         <AddTeacherModal
           isOpen={isAddTeacherOpen}
-          onClose={() => setIsAddTeacherOpen(false)}
+          onClose={() => {
+            setIsAddTeacherOpen(false);
+            setEditingTeacher(null);
+          }}
           onSave={handleAddNewTeacher}
           schoolList={schools}
+          editingTeacher={editingTeacher}
         />
       )}
 

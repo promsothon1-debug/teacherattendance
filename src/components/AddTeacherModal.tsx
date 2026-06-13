@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { X, UserPlus, GraduationCap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, UserPlus, GraduationCap, Edit3 } from 'lucide-react';
 import { Teacher, Gender, Shift, SCHOOL_LIST } from '../types';
 
 interface AddTeacherModalProps {
@@ -12,9 +12,16 @@ interface AddTeacherModalProps {
   onClose: () => void;
   onSave: (teacher: Teacher) => void;
   schoolList?: string[];
+  editingTeacher?: Teacher | null;
 }
 
-export default function AddTeacherModal({ isOpen, onClose, onSave, schoolList = SCHOOL_LIST }: AddTeacherModalProps) {
+export default function AddTeacherModal({
+  isOpen,
+  onClose,
+  onSave,
+  schoolList = SCHOOL_LIST,
+  editingTeacher = null
+}: AddTeacherModalProps) {
   const [name, setName] = useState('');
   const [gender, setGender] = useState<Gender>(Gender.MALE);
   const [school, setSchool] = useState(schoolList[0] || '');
@@ -23,12 +30,43 @@ export default function AddTeacherModal({ isOpen, onClose, onSave, schoolList = 
   const [role, setRole] = useState('គ្រូបង្រៀន');
   const [shift, setShift] = useState<Shift>(Shift.MORNING);
 
+  // Sync form state when modal becomes open or editingTeacher changes
+  useEffect(() => {
+    if (isOpen) {
+      if (editingTeacher) {
+        setName(editingTeacher.name);
+        setGender(editingTeacher.gender);
+        
+        const isStandard = schoolList.includes(editingTeacher.school);
+        if (isStandard) {
+          setSchool(editingTeacher.school);
+          setUseCustomSchool(false);
+          setCustomSchool('');
+        } else {
+          setSchool(schoolList[0] || '');
+          setUseCustomSchool(true);
+          setCustomSchool(editingTeacher.school);
+        }
+        setRole(editingTeacher.role);
+        setShift(editingTeacher.shift);
+      } else {
+        setName('');
+        setGender(Gender.MALE);
+        setSchool(schoolList[0] || '');
+        setCustomSchool('');
+        setUseCustomSchool(false);
+        setRole('គ្រូបង្រៀន');
+        setShift(Shift.MORNING);
+      }
+    }
+  }, [isOpen, editingTeacher, schoolList]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    const newTeacher: Teacher = {
-      id: 'T_' + Date.now(),
+    const teacherData: Teacher = {
+      id: editingTeacher ? editingTeacher.id : 'T_' + Date.now(),
       name: name.trim(),
       gender,
       school: useCustomSchool ? customSchool.trim() : school,
@@ -36,20 +74,13 @@ export default function AddTeacherModal({ isOpen, onClose, onSave, schoolList = 
       shift
     };
 
-    onSave(newTeacher);
-    
-    // reset form fields
-    setName('');
-    setGender(Gender.MALE);
-    setSchool(schoolList[0] || '');
-    setCustomSchool('');
-    setUseCustomSchool(false);
-    setRole('គ្រូបង្រៀន');
-    setShift(Shift.MORNING);
+    onSave(teacherData);
     onClose();
   };
 
   if (!isOpen) return null;
+
+  const isEditing = !!editingTeacher;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-brown/60 backdrop-blur-sm animate-fade-in" id="add-teacher-modal-overlay">
@@ -60,8 +91,12 @@ export default function AddTeacherModal({ isOpen, onClose, onSave, schoolList = 
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-brand-clay bg-brand-sand-light">
           <h3 className="font-bold text-brand-green text-base md:text-lg flex items-center gap-2">
-            <UserPlus className="h-5 w-5 text-brand-green" />
-            <span>ចុះឈ្មោះលោកគ្រូ-អ្នកគ្រូថ្មី</span>
+            {isEditing ? (
+              <Edit3 className="h-5 w-5 text-brand-green" />
+            ) : (
+              <UserPlus className="h-5 w-5 text-brand-green" />
+            )}
+            <span>{isEditing ? 'កែសម្រួលព័ត៌មានលោកគ្រូ-អ្នកគ្រូ' : 'ចុះឈ្មោះលោកគ្រូ-អ្នកគ្រូថ្មី'}</span>
           </h3>
           <button 
             onClick={onClose}
@@ -184,8 +219,12 @@ export default function AddTeacherModal({ isOpen, onClose, onSave, schoolList = 
               className="px-5 py-2 text-sm font-bold text-white bg-brand-green hover:bg-[#3d4d38] rounded-xl shadow-md cursor-pointer transition-colors flex items-center gap-2"
               id="submit-add-teacher"
             >
-              <GraduationCap className="h-4 w-4" />
-              <span>កត់ត្រាការចុះឈ្មោះ</span>
+              {isEditing ? (
+                <Edit3 className="h-4 w-4" />
+              ) : (
+                <GraduationCap className="h-4 w-4" />
+              )}
+              <span>{isEditing ? 'រក្សាទុកការកែប្រែ' : 'កត់ត្រាការចុះឈ្មោះ'}</span>
             </button>
           </div>
         </form>

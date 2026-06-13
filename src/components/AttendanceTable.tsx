@@ -31,6 +31,7 @@ interface AttendanceTableProps {
   onUpdateRemarks: (recordId: string, remarks: string) => void;
   onRemoveRecord: (recordId: string) => void;
   onDeleteTeacher?: (teacherId: string) => void;
+  onEditTeacher?: (teacherId: string) => void;
   onMassCheckIn?: (recordIds: string[], mode: 'in' | 'out', signatureBase64: string | null) => void;
   filterShift: string;
   filterGender: string;
@@ -47,6 +48,7 @@ export default function AttendanceTable({
   onUpdateRemarks,
   onRemoveRecord,
   onDeleteTeacher,
+  onEditTeacher,
   onMassCheckIn,
   filterShift,
   filterGender,
@@ -622,6 +624,16 @@ export default function AttendanceTable({
                     {/* Actions Column */}
                     <td className="px-4 py-3 text-center print:hidden">
                       <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {onEditTeacher && (
+                          <button
+                            onClick={() => onEditTeacher(rec.teacherId)}
+                            className="p-1 rounded text-brand-green hover:text-[#3d4d38] hover:bg-brand-sand transition-all"
+                            id={`edit-teacher-btn-${rec.id}`}
+                            title="កែសម្រួលព័ត៌មានលោកគ្រូ-អ្នកគ្រូ"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => onRemoveRecord(rec.id)}
                           className="p-1 rounded text-brand-brown-muted hover:text-rose-600 hover:bg-rose-50 transition-all"
