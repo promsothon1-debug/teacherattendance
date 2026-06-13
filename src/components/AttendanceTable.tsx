@@ -336,13 +336,19 @@ export default function AttendanceTable({
               {filteredRecords.map((rec, index) => {
                 const isSignInComplete = !!rec.timeIn && !!rec.signatureIn;
                 const isSignOutComplete = !!rec.timeOut && !!rec.signatureOut;
-                const isLateIn = rec.timeIn ? isLateTime(rec.timeIn, rec.shift) : false;
+                
+                const calculatedMinsLate = rec.timeIn ? (rec.minutesLate !== undefined ? rec.minutesLate : calculateMinutesLate(rec.timeIn, rec.shift)) : 0;
+                const isLateIn = calculatedMinsLate > 0 || (rec.timeIn ? isLateTime(rec.timeIn, rec.shift) : false);
 
                 return (
                   <tr 
                     key={rec.id} 
-                    className={`hover:bg-brand-sand-light/50 transition-colors group ${
-                      isLateIn ? 'bg-red-50/20' : ''
+                    className={`hover:bg-brand-sand-light/50 transition-colors group border-l-4 ${
+                      isLateIn 
+                        ? 'bg-red-50/20 border-l-red-500' 
+                        : selectedIds.includes(rec.id) 
+                          ? 'bg-brand-sand/10 border-l-brand-green/40' 
+                          : 'border-l-transparent'
                     } ${selectedIds.includes(rec.id) ? 'bg-brand-sand/10' : ''}`}
                   >
                     {/* Checkbox Column */}
@@ -362,12 +368,31 @@ export default function AttendanceTable({
                     </td>
 
                     {/* Teacher Info */}
-                    <td className="px-4 py-3 font-bold text-brand-green">
+                    <td className={`px-4 py-3 font-bold transition-colors ${isLateIn ? 'text-red-700' : 'text-brand-green'}`}>
                       <div className="flex items-center gap-2">
-                        <div className={`p-1 rounded-full ${rec.gender === Gender.FEMALE ? 'bg-pink-50 text-pink-600' : 'bg-brand-sand text-brand-brown'}`}>
-                          <User className="h-3.5 w-3.5" />
+                        <div className={`p-1 rounded-full flex-shrink-0 transition-colors ${
+                          isLateIn 
+                            ? 'bg-red-100 text-red-600 animate-pulse' 
+                            : rec.gender === Gender.FEMALE 
+                              ? 'bg-pink-50 text-pink-600' 
+                              : 'bg-brand-sand text-brand-brown'
+                        }`}>
+                          {isLateIn ? (
+                            <ShieldAlert className="h-3.5 w-3.5" title={`យឺត (Late)៖ យឺត ${calculatedMinsLate} នាទី`} />
+                          ) : (
+                            <User className="h-3.5 w-3.5" />
+                          )}
                         </div>
-                        <span>{rec.name}</span>
+                        <div className="flex flex-col">
+                          <span className="flex items-center gap-1.5 flex-wrap">
+                            <span>{rec.name}</span>
+                            {isLateIn && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-extrabold text-red-700 bg-red-100 border border-red-200 rounded-md tracking-wide">
+                                យឺត {toKhmerNumber(calculatedMinsLate)} នាទី ({calculatedMinsLate}m)
+                              </span>
+                            )}
+                          </span>
+                        </div>
                       </div>
                     </td>
 

@@ -25,7 +25,8 @@ import {
   ScanLine,
   School,
   ClipboardList,
-  History
+  History,
+  Send
 } from 'lucide-react';
 
 import { 
@@ -144,6 +145,9 @@ export default function App() {
   // Daily Summary Report modal state
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
 
+  // Telegram integration manual/guide toggle state
+  const [showTelegramTips, setShowTelegramTips] = useState(false);
+
   // Notice alerts messages
   const [alertMessage, setAlertMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
@@ -254,6 +258,71 @@ export default function App() {
     localStorage.setItem('ou_sralau_attendance_records', JSON.stringify(updatedRecords));
   };
 
+  // Telegram integration configurations and state
+  const [isTelegramConfigured, setIsTelegramConfigured] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/telegram-config')
+      .then(res => res.json())
+      .then(data => {
+        setIsTelegramConfigured(!!data.configured);
+      })
+      .catch(err => {
+        console.error("Error fetching telegram configuration:", err);
+      });
+  }, []);
+
+  const sendTelegramAlert = async (
+    teacherName: string, 
+    type: 'in' | 'out', 
+    time: string, 
+    minutesLate: number | undefined, 
+    school: string,
+    dateStr: string
+  ) => {
+    if (!isTelegramConfigured) return;
+
+    try {
+      const d = new Date(dateStr);
+      const formattedDate = !isNaN(d.getTime()) 
+        ? d.toLocaleDateString('km-KH', { day: 'numeric', month: 'long', year: 'numeric' })
+        : dateStr;
+
+      let statusMsg = "";
+      if (type === 'in') {
+        if (minutesLate && minutesLate > 0) {
+          statusMsg = `⚠️ <b>យឺត ${toKhmerNumber(minutesLate)} នាទី</b>`;
+        } else {
+          statusMsg = `✅ <b>ទាន់ពេល (ទៀងម៉ោង)</b>`;
+        }
+      } else {
+        statusMsg = `✅ <b>បានចេញរួចរាល់</b>`;
+      }
+
+      const text = `🔔 <b>របាយការណ៍វត្តមានថ្មី (កម្រងអូរស្រឡៅ)</b>\n\n` +
+        `• ឈ្មោះ៖ <b>${teacherName}</b>\n` +
+        `• សាលារៀន៖ <b>${school || 'មិនបញ្ជាក់'}</b>\n` +
+        `• កាលបរិច្ឆេទ៖ <b>${formattedDate}</b>\n` +
+        `• ម៉ោង៖ <code>${time}</code>\n` +
+        `• ប្រភេទវត្តមាន៖ <b>${type === 'in' ? 'ចូល (Check-In)' : 'ចេញ (Check-Out)'}</b>\n` +
+        `• ស្ថានភាព៖ ${statusMsg}\n\n` +
+        `<i>កត់ត្រាស្វ័យប្រវត្តិតាមរយៈប្រព័ន្ធវត្តមានកម្រងសាលាអូរស្រឡៅ</i>`;
+
+      const response = await fetch('/api/telegram-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.warn("Telegram alert failed to deliver:", errorData.error);
+      }
+    } catch (e) {
+      console.error("Failed sending Telegram message", e);
+    }
+  };
+
   // Trigger brief alert banner notifications
   const triggerAlert = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
     setAlertMessage({ text, type });
@@ -348,11 +417,11 @@ export default function App() {
   const handleSaveSignature = (signatureBase64: string, locationObj?: any) => {
     if (!activeSignRecord) return;
 
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('km-KH', { hour12: false });
+
     const updated = attendanceRecords.map((rec) => {
       if (rec.id === activeSignRecord.id) {
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString('km-KH', { hour12: false });
-        
         if (signatureMode === 'in') {
           return {
             ...rec,
@@ -375,6 +444,11 @@ export default function App() {
 
     saveRecordsToStorage(updated);
     triggerAlert(`បានកត់ត្រាវត្តមាន ${signatureMode === 'in' ? 'ចូល' : 'ចេញ'} សម្រាប់ ${activeSignRecord.name} រួចរាល់!`);
+    
+    // Trigger Telegram Notification
+    const minsLate = signatureMode === 'in' ? calculateMinutesLate(timeStr, activeSignRecord.shift) : undefined;
+    sendTelegramAlert(activeSignRecord.name, signatureMode, timeStr, minsLate, activeSignRecord.school, selectedDate);
+
     setActiveSignRecord(null);
   };
 
@@ -503,6 +577,10 @@ export default function App() {
 
     saveRecordsToStorage(updated);
     triggerAlert(`បានស្កែនកត់ត្រាវត្តមាន ${type === 'in' ? 'ចូល' : 'ចេញ'} សម្រាប់ ${teacher.name} រួចរាល់!`, 'success');
+
+    // Trigger Telegram Notification
+    const minsLate = type === 'in' ? calculateMinutesLate(timeStr, teacher.shift) : undefined;
+    sendTelegramAlert(teacher.name, type, timeStr, minsLate, teacher.school, selectedDate);
   };
 
   const handleQrScanSuccess = (data: {
@@ -570,8 +648,14 @@ export default function App() {
     }
 
     saveRecordsToStorage(updated);
-    const teacherName = teachers.find((t) => t.id === data.teacherId)?.name || 'គ្រូបង្រៀន';
+    const teacherObj = teachers.find((t) => t.id === data.teacherId);
+    const teacherName = teacherObj?.name || 'គ្រូបង្រៀន';
+    const teacherSchool = teacherObj?.school || '';
     triggerAlert(`បានស្កេនបញ្ចូលវត្តមាន [${teacherName}] វេន ${data.mode === 'in' ? 'ចូល' : 'ចេញ'} ដោយជោគជ័យ!`, 'success');
+
+    // Trigger Telegram Notification
+    const minsLate = data.mode === 'in' ? (teacherObj ? calculateMinutesLate(data.time, teacherObj.shift) : undefined) : undefined;
+    sendTelegramAlert(teacherName, data.mode, data.time, minsLate, teacherSchool, data.date);
   };
 
   const handleSaveSchools = (updatedSchools: string[], renameMapping?: { oldName: string; newName: string }) => {
@@ -991,6 +1075,86 @@ export default function App() {
               );
             })}
           </div>
+        </div>
+
+        {/* Telegram Bot Notification Status Card & Instructions */}
+        <div className="bg-white border border-brand-clay rounded-[32px] p-5 print:hidden space-y-4 animate-fade-in" id="telegram-status-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                isTelegramConfigured ? 'bg-sky-50 text-sky-600' : 'bg-brand-sand text-brand-brown-muted'
+              }`}>
+                <Send className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-brand-brown flex items-center gap-2">
+                  <span>ប្រព័ន្ធផ្ញើរបាយការណ៍ទៅ Telegram (Telegram Notifications)</span>
+                  {isTelegramConfigured ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 rounded-md">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+                      </span>
+                      សកម្ម (Activated)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-md">
+                      មិនទាន់រៀបចំ
+                    </span>
+                  )}
+                </h4>
+                <p className="text-xs text-brand-brown-muted mt-0.5">
+                  {isTelegramConfigured 
+                    ? "រាល់ពេលគ្រូៗកត់ត្រាវត្តមាន ព័ត៌មាននឹងត្រូវរុញទៅកាន់ Telegram Channel/Group របស់អ្នកដោយស្វ័យប្រវត្ត។"
+                    : "បិទ/បើកសេចក្តីណែនាំដើម្បីកំណត់ភ្ជាប់ប្រព័ន្ធវត្តមានស្វ័យប្រវត្តទៅកាន់ទូរស័ព្ទដៃរបស់លោកអ្នករហ័ស។"
+                  }
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowTelegramTips(!showTelegramTips)}
+              className="px-4 py-2 text-xs font-bold text-brand-green bg-brand-sand-light/50 border border-brand-clay hover:bg-brand-sand rounded-xl transition-all select-none cursor-pointer self-start sm:self-auto"
+              id="toggle-telegram-instructions-btn"
+            >
+              {showTelegramTips ? 'លាក់សេចក្ដីណែនាំ (Hide Setup)' : 'របៀបរៀបចំភ្ជាប់ (Show Setup Guide)'}
+            </button>
+          </div>
+
+          {showTelegramTips && (
+            <div className="pt-3 border-t border-brand-clay/55 space-y-3 text-xs leading-relaxed text-brand-brown-muted animate-fade-in">
+              <p className="font-bold text-brand-brown">សូមអនុវត្តន៍តាមជំហានទាំង ៤ ខាងក្រោមដើម្បីដំណើរការ Telegram Notifications៖</p>
+              <ol className="list-decimal list-inside space-y-2.5 font-sans font-medium text-brand-brown">
+                <li>
+                  <span className="text-brand-brown-muted font-sans ml-1">បង្កើត Telegram Bot ផ្ទាល់ខ្លួន៖</span>
+                  <p className="pl-5 mt-0.5 text-[11px] text-brand-brown-muted leading-relaxed">
+                    ស្វែងរកគណនី <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-sky-600 hover:underline font-bold">@BotFather</a> នៅក្នុងកម្មវិធី Telegram រួចផ្ញើសារ <code className="bg-brand-sand px-1.5 py-0.5 rounded font-bold">/newbot</code> ដើម្បីបង្កើត Bot ថ្មី។ អ្នកនឹងទទួលបាន <strong className="text-brand-green">HTTP API Token</strong> (ឧ. <code className="bg-brand-sand px-1.5 py-0.5 rounded font-mono font-bold">123456789:ABC...</code>)។
+                  </p>
+                </li>
+                <li>
+                  <span className="text-brand-brown-muted font-sans ml-1">យក Chat ID ឬ Channel ID របស់អ្នក៖</span>
+                  <p className="pl-5 mt-0.5 text-[11px] text-brand-brown-muted leading-relaxed">
+                    បង្កើត Telegram Group ឬ Channel ថ្មីមួយ រួចបន្ថែម Bot ដែលបានបង្កើតខាងលើចូលជា Admin។ បន្ទាប់មក ផ្ញើសារ ឬ តេស្តយក Chat ID របស់អ្នក (អ្នកអាចប្រើ Bot ជំនួយដូចជា <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="text-sky-600 hover:underline font-bold">@userinfobot</a> ឬ <a href="https://t.me/myidbot" target="_blank" rel="noopener noreferrer" className="text-sky-600 hover:underline font-bold">@myidbot</a> រួចវាយ <code className="bg-brand-sand px-1.5 py-0.5 rounded font-bold">/getid</code> ក្នុងគ្រុបនោះ ដើម្បីដឹងលេខសម្គាល់ ឧ. <code className="bg-brand-sand px-1.5 py-0.5 rounded font-mono font-bold">-100123456789</code>)។
+                  </p>
+                </li>
+                <li>
+                  <span className="text-brand-brown-muted font-sans ml-1">បំពេញកំណត់តម្លៃ (Secrets Configuration)៖</span>
+                  <p className="pl-5 mt-0.5 text-[11px] text-brand-brown-muted leading-relaxed">
+                    សូមចូលទៅកាន់ <strong className="text-brand-green">Settings / Secrets</strong> នៅក្នុង AI Studio Panel ផ្នែកខាងស្តាំ/ខាងលើ រួចកំណត់បញ្ចូលតម្លៃពីរខាងក្រោមនេះ៖
+                  </p>
+                  <ul className="pl-10 list-disc space-y-1 text-[11px] text-brand-brown-muted mt-1.5">
+                    <li>កំណត់ឈ្មោះ <code className="bg-brand-sand px-1.5 py-0.5 rounded font-mono font-extrabold text-[#d48d3b]">TELEGRAM_BOT_TOKEN</code> រួចបំពេញតម្លៃម្ជុល Token ដែលចម្លងបានពីរ @BotFather។</li>
+                    <li>កំណត់ឈ្មោះ <code className="bg-brand-sand px-1.5 py-0.5 rounded font-mono font-extrabold text-[#d48d3b]">TELEGRAM_CHAT_ID</code> រួចបំពេញលេខសម្គាល់ ID របស់គ្រុប ឬ ឆានែល។</li>
+                  </ul>
+                </li>
+                <li>
+                  <span className="text-brand-brown-muted font-sans ml-1">សាកល្បង និងឆែកលទ្ធផល៖</span>
+                  <p className="pl-5 mt-0.5 text-[11px] text-brand-brown-muted leading-relaxed">
+                    បន្ទាប់ពីបំពេញរួចរាល់ ជ្រើសរើសចុះហត្ថលេខាវត្តមានណាមួយ។ ប្រព័ន្ធនឹងកត់ត្រាទិន្នន័យផង និងផ្ញើសារស្វ័យប្រវត្តជាភាសាខ្មែរទៅកាន់ Telegram បញ្ជាក់ភ្លាមៗ!
+                  </p>
+                </li>
+              </ol>
+            </div>
+          )}
         </div>
 
         {/* Summary Statistics Panel Widgets */}
