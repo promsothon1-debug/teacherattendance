@@ -318,11 +318,11 @@ export default function SignatureModal({
           </button>
           <button
             onClick={handleSave}
-            className="w-full sm:w-auto px-5 py-2 text-sm font-bold text-white bg-brand-green hover:bg-[#3d4d38] rounded-xl shadow-md cursor-pointer transition-colors flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-5 py-2.5 text-sm font-bold text-white bg-brand-green hover:bg-[#3d4d38] rounded-xl shadow-md cursor-pointer transition-all flex items-center justify-center gap-2 ring-2 ring-brand-green/20"
             id="save-signature-modal"
           >
-            <ShieldCheck className="h-4 w-4" />
-            <span>រក្សាទុកហត្ថលេខា & វត្តមាន</span>
+            <ShieldCheck className="h-4 w-4 animate-pulse" />
+            <span>បញ្ជូន និងរក្សាទុកវត្តមាន (Submit Attendance)</span>
           </button>
         </div>
       </div>

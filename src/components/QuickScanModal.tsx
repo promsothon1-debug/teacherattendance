@@ -517,16 +517,28 @@ export default function QuickScanModal({
                   </div>
                 </div>
 
-                <div className="flex justify-center gap-3 w-full">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 w-full">
                   <button
                     type="button"
                     onClick={handleResetScan}
-                    className="px-4 py-1.5 text-xs font-bold text-brand-brown bg-white border border-brand-clay hover:bg-brand-sand rounded-xl flex items-center gap-1 transition-all cursor-pointer"
+                    className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-brand-brown bg-white border border-brand-clay hover:bg-brand-sand rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     id="scan-reset-btn"
                   >
-                    <RefreshCw className="h-3 w-3" />
-                    <span>ថតឬបង្ហោះមគ្គថ្មី</span>
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    <span>ថតឬបង្ហោះថ្មី (Retry/Upload)</span>
                   </button>
+
+                  {processedSignature && (
+                    <button
+                      type="button"
+                      onClick={handleConfirmSave}
+                      className="w-full sm:w-auto px-5 py-2 text-xs font-bold text-white bg-brand-accent hover:bg-brand-accent-hover rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-brand-accent/25 animate-pulse"
+                      id="scan-submit-inline-btn"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>បញ្ជូនវត្តមានឥឡូវនេះ (Submit Attendance)</span>
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -555,11 +567,15 @@ export default function QuickScanModal({
           <button
             onClick={handleConfirmSave}
             disabled={!selectedTeacherId || !processedSignature}
-            className="w-full sm:w-auto px-5 py-2 text-sm font-bold text-white bg-brand-green hover:bg-[#3d4d38] disabled:bg-brand-clay disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            className={`w-full sm:w-auto px-5 py-2 text-sm font-bold text-white rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              (selectedTeacherId && processedSignature)
+                ? 'bg-brand-green hover:bg-[#3d4d38] ring-2 ring-brand-green/20 animate-pulse'
+                : 'bg-brand-clay opacity-50 cursor-not-allowed'
+            }`}
             id="confirm-quick-scan-modal"
           >
             <CheckCircle2 className="h-4 w-4" />
-            <span>បញ្ជាក់ការស្កែនវត្តមាន & ហត្ថលេខា</span>
+            <span>បញ្ជូនវត្តមាន និងហត្ថលេខា (Submit Attendance)</span>
           </button>
         </div>
       </div>

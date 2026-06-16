@@ -455,7 +455,7 @@ export default function MobileSignScreen({ teacherId, mode, date, teachers }: Mo
               id="mobile-confirm-attendance-btn"
             >
               <CheckCircle className="h-4.5 w-4.5 text-brand-accent animate-bounce" />
-              <span>បញ្ជាក់ និងរក្សាទុកវត្តមាន</span>
+              <span>បញ្ជូន និងរក្សាទុកវត្តមាន (Submit Attendance)</span>
             </button>
           </div>
         ) : (
