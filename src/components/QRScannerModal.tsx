@@ -39,6 +39,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess }: QRSca
   const [scanResult, setScanResult] = useState<{ name?: string; mode?: string } | null>(null);
   const [isSuccessState, setIsSuccessState] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
 
   // Canvas and video references for camera decoding loop
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -61,24 +62,31 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess }: QRSca
     return () => {
       stopCamera();
     };
-  }, [isOpen, activeTab]);
+  }, [isOpen, activeTab, facingMode]);
 
   const startCamera = async () => {
     setCameraLoading(true);
     setCameraError(null);
     setErrorMessage(null);
     
+    // Stop any existing stream first to avoid hardware conflict
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    
     try {
       // Direct media streams request
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' } // prefer rear camera
+        video: { facingMode: facingMode }
       });
       
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute('playsinline', 'true'); // Required for iOS
-        videoRef.current.play();
+        videoRef.current.setAttribute('muted', 'true'); // Required for inline autoplay
+        videoRef.current.play().catch(e => console.log('Video auto-play blocked:', e));
         
         // Start decoding loop
         animationFrameRef.current = requestAnimationFrame(tickCamera);
@@ -339,10 +347,24 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess }: QRSca
                         {/* Live video layer */}
                         <video 
                           ref={videoRef} 
+                          autoPlay
+                          playsInline
+                          muted
                           className="w-full h-full object-cover" 
                           id="scanner-video"
                         />
                         <canvas ref={canvasRef} className="hidden" />
+
+                        {/* Camera Direction Toggle Button */}
+                        <button
+                          type="button"
+                          onClick={() => setFacingMode(prev => prev === 'environment' ? 'user' : 'environment')}
+                          className="absolute bottom-3 right-3 bg-black/65 hover:bg-black/85 text-brand-sand hover:text-white rounded-xl py-2 px-3 text-[11px] font-bold transition-all cursor-pointer z-10 flex items-center gap-1.5 backdrop-blur-sm shadow border border-white/10"
+                          id="toggle-camera-facing-btn"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          <span>ប្តូរកាមេរ៉ា ({facingMode === 'environment' ? 'កាមេរ៉ាក្រោយ' : 'កាមេរ៉ាមុខ'})</span>
+                        </button>
 
                         {/* Aesthetic scan layer target crosshair */}
                         <div className="absolute inset-0 border-2 border-transparent flex items-center justify-center pointer-events-none">

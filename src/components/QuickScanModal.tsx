@@ -419,6 +419,7 @@ export default function QuickScanModal({
                           ref={videoRef}
                           autoPlay 
                           playsInline 
+                          muted
                           className="w-full h-full object-cover scale-x-[-1]"
                         />
                         {/* Camera Bounding Box Target */}
